@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    /* Basic Options */
+    "target": "ES2022",                     // Compila a una versión moderna de JavaScript
+    "module": "NodeNext",                  // Usa el sistema de módulos moderno de Node.js
+    "moduleResolution": "NodeNext",        // Cómo Node.js moderno busca los módulos
+    "outDir": "./dist",                    // Dónde guardar los ficheros compilados
+    "rootDir": "./src",                    // Dónde está nuestro código fuente
+
+    /* Strict Type-Checking Options */
+    "strict": true,                        // Activa todas las comprobaciones de tipo estrictas
+
+    /* Module Interop Options */
+    "esModuleInterop": true,               // Permite una mejor interoperabilidad entre módulos
+
+    /* Advanced Options */
+    "skipLibCheck": true,                  // Evita comprobar los tipos de las librerías
+    "forceConsistentCasingInFileNames": true // Evita errores de mayúsculas/minúsculas en los nombres de fichero
+  },
+  "include": ["src/**/*"],                 // Qué carpetas incluir en la compilación
+  "exclude": ["node_modules"]              // Qué carpetas excluir
+}

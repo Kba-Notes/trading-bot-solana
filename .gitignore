@@ -1,0 +1,11 @@
+# Dependencias
+node_modules
+
+# Ficheros de compilación
+dist
+
+# Ficheros de log
+*.log
+
+# Ficheros de entorno con secretos
+.env
