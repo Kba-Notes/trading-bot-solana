@@ -1,38 +1,41 @@
+// src/data_extractor/jupiter.ts
 import 'dotenv/config';
 import axios from 'axios';
+import { logger } from '../services.js';
 
 /**
- * Obtiene el precio más reciente de un par de tokens usando el endpoint /quote de Júpiter.
- * @param inputMint La dirección del token de entrada.
- * @param outputMint La dirección del token de salida.
- * @returns El precio actual o null si hay un error.
+ * Gets the most recent price of a token using Jupiter's price endpoint.
+ * @param mintAddress The address of the token to query.
+ * @returns The current price in USDC or null if there's an error.
  */
-export async function getCurrentPrice(inputMint: string, outputMint: string): Promise<number | null> {
+export async function getCurrentPrice(mintAddress: string): Promise<number | null> {
     try {
-        const amount = (inputMint === 'So11111111111111111111111111111111111111112') ? 1000000000 : 1000000;
-        const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50`;
-        
+        const url = `https://lite-api.jup.ag/price/v3/?ids=${mintAddress}`;
+
         const response = await axios.get(url);
-        
+
+        // Debug line - shows complete API response
+        console.log("Complete API response:", JSON.stringify(response.data, null, 2));
+
         const data = response.data;
-        if (data && data.outAmount) {
-            const price = parseInt(data.outAmount) / 1000000;
-            return price;
+        if (data && data[mintAddress]) {
+            return data[mintAddress].usdPrice;
         }
-        console.error("No se encontró el precio en la respuesta de la API de Júpiter Quote");
+
+        logger.error(`Price not found for ${mintAddress} in API response`);
         return null;
-    } catch (error) {
-        console.error("Error al obtener el precio actual:", error);
+    } catch (error: any) {
+        logger.error(`Error in getCurrentPrice for ${mintAddress}:`, error.response?.data || error.message);
         return null;
     }
 }
 
 /**
- * Obtiene una serie de precios de cierre históricos usando el endpoint permitido por el plan gratuito de Birdeye.
- * @param mint La dirección del token que queremos analizar.
- * @param timeframe El marco de tiempo de las velas.
- * @param limit La cantidad de precios de cierre a obtener.
- * @returns Un array de números (precios de cierre) o un array vacío si hay error.
+ * Gets a series of historical closing prices using Birdeye.
+ * @param mint The address of the token to analyze.
+ * @param timeframe The timeframe of the candles.
+ * @param limit The number of closing prices to retrieve.
+ * @returns An array of numbers (closing prices) or an empty array if there's an error.
  */
 export async function getHistoricalData(mint: string, timeframe: '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w', limit: number): Promise<number[]> {
     try {
@@ -40,17 +43,16 @@ export async function getHistoricalData(mint: string, timeframe: '1m' | '5m' | '
         const now = Math.floor(Date.now() / 1000);
 
         const url = `https://public-api.birdeye.so/defi/history_price?address=${mint}&address_type=token&type=${timeframe.toUpperCase()}&time_from=${tenDaysAgo}&time_to=${now}`;
-        
+
         const headers = {'X-API-KEY': process.env.BIRDEYE_API_KEY};
         const response = await axios.get(url, { headers });
-        
+
         if (response.data && response.data.data.items) {
-            // Extraemos únicamente el precio de cierre ('value') de cada item.
             return response.data.data.items.map((item: any) => item.value).slice(-limit);
         }
         return [];
-    } catch (error) {
-        console.error("Error al obtener datos históricos:", error);
+    } catch (error: any) {
+        logger.error(`Error fetching historical data from Birdeye for ${mint}:`, error.message);
         return [];
     }
 }

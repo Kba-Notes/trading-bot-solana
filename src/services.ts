@@ -3,7 +3,7 @@ import 'dotenv/config';
 import winston from 'winston';
 import TelegramBot from 'node-telegram-bot-api';
 
-// --- 1. CONFIGURACIÓN DEL LOGGER ---
+// --- 1. LOGGER CONFIGURATION ---
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -24,7 +24,7 @@ logger.add(new winston.transports.Console({
   )
 }));
 
-// --- 2. CONFIGURACIÓN DEL BOT DE TELEGRAM ---
+// --- 2. TELEGRAM BOT CONFIGURATION ---
 const token = process.env.TELEGRAM_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -32,10 +32,10 @@ let bot: TelegramBot | null = null;
 
 if (token && chatId) {
     bot = new TelegramBot(token);
-    logger.info('Bot de Telegram inicializado correctamente.');
+    logger.info('Telegram bot initialized successfully.');
 } else {
-    logger.warn('Credenciales de Telegram no encontradas. El notificador estará desactivado.');
+    logger.warn('Telegram credentials not found. Notifier will be disabled.');
 }
 
-// --- 3. EXPORTACIÓN DE LOS SERVICIOS ---
+// --- 3. SERVICE EXPORTS ---
 export { logger, bot, chatId };

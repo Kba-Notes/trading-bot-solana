@@ -12,7 +12,7 @@ import axios from 'axios';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let executionCycleCounter = 0;
 
-// --- NUEVA FUNCIÓN: Obtiene datos desde CoinGecko ---
+// Fetches historical price data from CoinGecko
 async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
     try {
         const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=30&interval=daily`;
@@ -22,12 +22,12 @@ async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
         }
         return [];
     } catch (error: any) {
-        logger.error(`Error al obtener datos de CoinGecko para ${id}:`, error.message);
+        logger.error(`Error fetching CoinGecko data for ${id}:`, error.message);
         return [];
     }
 }
 
-// --- FUNCIÓN MODIFICADA: Usa Birdeye para datos de SOL ---
+// Fetches historical price data from Birdeye (used for SOL)
 async function getBirdeyeHistoricalData(mint: string): Promise<number[]> {
     try {
         const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
@@ -40,39 +40,39 @@ async function getBirdeyeHistoricalData(mint: string): Promise<number[]> {
         }
         return [];
     } catch (error: any) {
-        logger.error(`Error al obtener datos de Birdeye para ${mint}:`, error.message);
+        logger.error(`Error fetching Birdeye data for ${mint}:`, error.message);
         return [];
     }
 }
 
 async function calculateMarketHealth(): Promise<number> {
     let weightedDistanceSum = 0;
-    logger.info('Calculando Índice de Salud de Mercado...');
+    logger.info('Calculating Market Health Index...');
 
     for (const asset of marketFilterConfig.assets) {
         let prices: number[] = [];
         if (asset.name === 'SOL') {
             prices = await getBirdeyeHistoricalData(asset.id);
-        } else { // Para BTC y ETH
+        } else { // For BTC and ETH
             prices = await getCoingeckoHistoricalData(asset.id);
         }
 
         if (prices.length < marketFilterConfig.indicatorPeriod) {
-            logger.warn(`Datos insuficientes para ${asset.name} en el filtro de mercado.`);
-            return 0; // Si un activo falla, el filtro es inválido por seguridad.
+            logger.warn(`Insufficient data for ${asset.name} in market filter.`);
+            return 0; // If an asset fails, filter is invalid for safety
         }
 
         const currentPrice = prices[prices.length - 1];
         const sma = SMA.calculate({ period: marketFilterConfig.indicatorPeriod, values: prices }).pop()!;
-        
+
         const distance = ((currentPrice - sma) / sma) * 100;
         weightedDistanceSum += distance * asset.weight;
 
-        logger.info(`  - ${asset.name}: Precio=${currentPrice.toFixed(2)}, SMA20=${sma.toFixed(2)}, Distancia=${distance.toFixed(2)}%`);
-        // Aumentamos la pausa para ser respetuosos con las APIs gratuitas
-        await sleep(2000); 
+        logger.info(`  - ${asset.name}: Price=${currentPrice.toFixed(2)}, SMA20=${sma.toFixed(2)}, Distance=${distance.toFixed(2)}%`);
+        // Increase pause to be respectful with free APIs
+        await sleep(2000);
     }
-    logger.info(`Índice de Salud de Mercado Final: ${weightedDistanceSum.toFixed(2)}`);
+    logger.info(`Final Market Health Index: ${weightedDistanceSum.toFixed(2)}`);
     return weightedDistanceSum;
 }
 
@@ -80,15 +80,15 @@ async function checkOpenPositions() {
     const openPositions = getOpenPositions();
     if (openPositions.length === 0) return;
 
-    logger.info(`Revisando ${openPositions.length} posiciones abiertas...`);
+    logger.info(`Checking ${openPositions.length} open positions...`);
 
     for (const position of openPositions) {
         const assetConfig = assetsToTrade.find(a => a.mint === position.asset);
         if (!assetConfig) continue;
 
-        const currentPrice = await getCurrentPrice(position.asset, USDC_MINT); 
+        const currentPrice = await getCurrentPrice(position.asset);
         if (currentPrice === null) {
-            logger.warn(`No se pudo obtener el precio actual para ${assetConfig.name}, no se puede verificar la posición.`);
+            logger.warn(`Could not get current price for ${assetConfig.name}, cannot verify position.`);
             continue;
         }
 
@@ -97,10 +97,10 @@ async function checkOpenPositions() {
 
         let shouldSell = false;
         if (currentPrice >= takeProfitPrice) {
-            logger.info(`¡TAKE PROFIT alcanzado para ${assetConfig.name}!`);
+            logger.info(`TAKE PROFIT reached for ${assetConfig.name}!`);
             shouldSell = true;
         } else if (currentPrice <= stopLossPrice) {
-            logger.info(`¡STOP LOSS alcanzado para ${assetConfig.name}!`);
+            logger.info(`STOP LOSS reached for ${assetConfig.name}!`);
             shouldSell = true;
         }
 
@@ -112,46 +112,45 @@ async function checkOpenPositions() {
 }
 
 /**
- * Busca nuevas oportunidades de compra en la lista de activos.
+ * Searches for new buy opportunities in the asset list.
  */
 async function findNewOpportunities(marketHealthIndex: number) {
     const openPositions = getOpenPositions();
-    logger.info('Buscando nuevas oportunidades de compra...');
+    logger.info('Searching for new buy opportunities...');
 
     if (marketHealthIndex <= 0) {
-        logger.info('Filtro de mercado negativo. Compras deshabilitadas para este ciclo.');
+        logger.info('Negative market filter. Buying disabled for this cycle.');
         return;
     }
 
     for (const asset of assetsToTrade) {
         if (openPositions.some(p => p.asset === asset.mint)) {
-            logger.info(`Ya existe una posición para ${asset.name}, saltando...`);
+            logger.info(`Position already exists for ${asset.name}, skipping...`);
             continue;
         }
 
         const historicalPrices = await getJupiterHistoricalData(asset.mint, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
         if (historicalPrices.length < 50) {
-            logger.warn(`Datos históricos insuficientes para ${asset.name}, saltando...`);
+            logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
             await sleep(1100);
             continue;
         }
-        
+
         const { decision, indicators } = runStrategy(historicalPrices, marketHealthIndex);
 
-        // --- NUEVO: Logging Detallado ---
+        // Detailed logging
         if (indicators) {
-            logger.info(`[Análisis de Activo]: ${asset.name}`);
-            logger.info(`[Datos Técnicos]: SMA12=${indicators.sma12.toFixed(8)} | SMA26=${indicators.sma26.toFixed(8)} | RSI14=${indicators.rsi14.toFixed(2)}`);
-            logger.info(`[Decisión]: ${decision.action}. Motivo: ${decision.reason}`);
+            logger.info(`[Asset Analysis]: ${asset.name}`);
+            logger.info(`[Technical Data]: SMA12=${indicators.sma12.toFixed(8)} | SMA26=${indicators.sma26.toFixed(8)} | RSI14=${indicators.rsi14.toFixed(2)}`);
+            logger.info(`[Decision]: ${decision.action}. Reason: ${decision.reason}`);
         }
-        // --- FIN del Logging Detallado ---
 
         if (decision.action === 'BUY') {
-            const currentPrice = await getCurrentPrice(asset.mint, USDC_MINT);
+            const currentPrice = await getCurrentPrice(asset.mint);
             if (currentPrice) {
                 await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
             } else {
-                logger.error(`No se pudo obtener el precio para ejecutar la compra de ${asset.name}`);
+                logger.error(`Could not get price to execute buy for ${asset.name}`);
             }
         }
         await sleep(1100);
@@ -159,13 +158,13 @@ async function findNewOpportunities(marketHealthIndex: number) {
 }
 
 async function main() {
-    logger.info('🚀🚀🚀 Bot de Trading Iniciado (v2 con Filtro de Mercado) 🚀🚀🚀');
-    sendMessage('✅ **Bot Iniciado v2 (con Filtro)**\nEl bot está online y funcionando.');
-    
+    logger.info('🚀🚀🚀 Trading Bot Started (v2 with Market Filter) 🚀🚀🚀');
+    sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
+
     while (true) {
         try {
-            logger.info('--- Nuevo ciclo de análisis iniciado ---');
-            
+            logger.info('--- New analysis cycle started ---');
+
             const marketHealthIndex = await calculateMarketHealth();
 
             await checkOpenPositions();
@@ -173,20 +172,20 @@ async function main() {
             await findNewOpportunities(marketHealthIndex);
 
             executionCycleCounter++;
-            logger.info(`Ciclo de ejecución número ${executionCycleCounter}.`);
-            
+            logger.info(`Execution cycle number ${executionCycleCounter}.`);
+
             if (executionCycleCounter >= 6) {
                 const openPositions = getOpenPositions();
-                sendMessage(`❤️ **Heartbeat**\nEl bot sigue activo.\nPosiciones abiertas: ${openPositions.length}\nÍndice de Mercado: \`${marketHealthIndex.toFixed(2)}\``);
+                sendMessage(`❤️ **Heartbeat**\nBot is still active.\nOpen positions: ${openPositions.length}\nMarket Index: \`${marketHealthIndex.toFixed(2)}\``);
                 executionCycleCounter = 0;
             }
 
-            logger.info(`--- Ciclo de análisis finalizado. Durmiendo por ${BOT_EXECUTION_INTERVAL / 1000 / 60} minutos... ---`);
+            logger.info(`--- Analysis cycle finished. Sleeping for ${BOT_EXECUTION_INTERVAL / 1000 / 60} minutes... ---`);
         } catch (error) {
-            logger.error('💥 Ha ocurrido un error inesperado en el bucle principal:', error);
-            sendMessage('❌ **¡ERROR CRÍTICO!**\nEl bot ha sufrido un error inesperado. Revisa los logs.');
+            logger.error('💥 Unexpected error in main loop:', error);
+            sendMessage('❌ **CRITICAL ERROR!**\nThe bot encountered an unexpected error. Check the logs.');
         }
-        
+
         await sleep(BOT_EXECUTION_INTERVAL);
     }
 }

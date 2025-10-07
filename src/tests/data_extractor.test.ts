@@ -11,7 +11,7 @@ async function runTests() {
 
   // Prueba 1: Obtener precio actual
   console.log('\n[Prueba 1: Obteniendo precio actual de SOL/USDC]');
-  const currentPrice = await getCurrentPrice(SOL_MINT, USDC_MINT);
+  const currentPrice = await getCurrentPrice(SOL_MINT);
   if (currentPrice !== null) {
     console.log(`✅ Éxito. Precio actual de SOL: ${currentPrice} USDC`);
   } else {

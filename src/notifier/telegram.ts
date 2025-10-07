@@ -2,48 +2,48 @@
 import { logger, bot, chatId } from '../services.js';
 
 /**
- * Envía un mensaje de texto a través del bot de Telegram.
+ * Sends a text message via Telegram bot.
  */
 export function sendMessage(message: string) {
-    logger.info(`Intentando enviar a Telegram: "${message.substring(0, 50)}..."`);
+    logger.info(`Attempting to send to Telegram: "${message.substring(0, 50)}..."`);
 
     if (bot && chatId) {
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' }).catch((error: any) => {
-            logger.error("Error al enviar mensaje de Telegram:", { error: error.message });
+            logger.error("Error sending Telegram message:", { error: error.message });
         });
     } else {
-        logger.warn(`[NOTIFICACIÓN (Telegram desactivado)]: ${message}`);
+        logger.warn(`[NOTIFICATION (Telegram disabled)]: ${message}`);
     }
 }
 
-// Interfaz para los detalles de una operación
+// Interface for trade operation details
 interface TradeDetails {
     asset: string;
-    action: 'COMPRA' | 'VENTA';
+    action: 'BUY' | 'SELL';
     price: number;
     reason?: string;
-    pnl?: number; // Beneficio/Pérdida (opcional)
+    pnl?: number; // Profit/Loss (optional)
 }
 
 /**
- * Formatea y envía una notificación de una operación de trading.
+ * Formats and sends a trading operation notification.
  */
 export function sendTradeNotification(details: TradeDetails) {
-    const icon = details.action === 'COMPRA' ? '📈' : '📉';
+    const icon = details.action === 'BUY' ? '📈' : '📉';
     let message = `
-*${icon} Nueva Operación: ${details.action}*
+*${icon} New Trade: ${details.action}*
 
-*Activo:* \`${details.asset}\`
-*Precio:* \`${details.price.toFixed(6)}\``;
+*Asset:* \`${details.asset}\`
+*Price:* \`${details.price.toFixed(6)}\``;
 
     if (details.reason) {
-        message += `\n*Motivo:* ${details.reason}`;
+        message += `\n*Reason:* ${details.reason}`;
     }
 
     if (details.pnl !== undefined) {
         const pnlIcon = details.pnl >= 0 ? '🟢' : '🔴';
-        message += `\n*Beneficio/Pérdida:* ${pnlIcon} \`$${details.pnl.toFixed(2)}\` USDC`;
+        message += `\n*Profit/Loss:* ${pnlIcon} \`$${details.pnl.toFixed(2)}\` USDC`;
     }
-    
+
     sendMessage(message);
 }

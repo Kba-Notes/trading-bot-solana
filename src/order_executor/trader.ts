@@ -24,52 +24,52 @@ export function getOpenPositions(): OpenPosition[] {
 }
 
 async function performJupiterSwap(inputMint: string, outputMint: string, amount: number, isBuy: boolean) {
-    logger.info(`Iniciando SWAP real. Entrada: ${inputMint}, Salida: ${outputMint}, Monto (unidad mínima): ${amount}`);
-    
+    logger.info(`Starting real SWAP. Input: ${inputMint}, Output: ${outputMint}, Amount (smallest unit): ${amount}`);
+
     const privateKey = process.env.PRIVATE_KEY;
     if (!privateKey) {
-        logger.error('¡Clave privada no encontrada en .env! Abortando operación.');
-        sendTradeNotification({ asset: 'SISTEMA', action: 'VENTA', price: 0, reason: 'Error Crítico: Clave privada no encontrada.'});
+        logger.error('Private key not found in .env! Aborting operation.');
+        sendTradeNotification({ asset: 'SYSTEM', action: 'SELL', price: 0, reason: 'Critical Error: Private key not found.'});
         return false;
     }
     const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
     const connection = new Connection('https://api.mainnet-beta.solana.com');
 
     try {
-        logger.info('1. Obteniendo cotización de Jupiter...');
-        // CORRECCIÓN: Endpoints actualizados a v1 (vigentes desde Oct 1, 2025)
+        logger.info('1. Getting Jupiter quote...');
+        // FIXED: Endpoints updated to v1 (effective since Oct 1, 2025)
         const quoteResponse = await axios.get('https://lite-api.jup.ag/swap/v1/quote', {
             params: {
                 inputMint,
                 outputMint,
                 amount,
-                slippageBps: 250, // 2.5% slippage para tokens menos líquidos
-                maxAccounts: 64, // Limita complejidad de la transacción
-                asLegacyTransaction: false, // Usar transacciones versionadas por defecto
+                slippageBps: 250, // 2.5% slippage for less liquid tokens
+                maxAccounts: 64, // Limits transaction complexity
+                asLegacyTransaction: false, // Use versioned transactions by default
             }
         });
 
         if (!quoteResponse.data) {
-            logger.error('No se pudo obtener una cotización válida de Jupiter.');
+            logger.error('Could not get a valid quote from Jupiter.');
             return false;
         }
 
-        logger.info(`2. Cotización obtenida. Construyendo transacción de swap...`);
+        logger.info(`2. Quote obtained. Building swap transaction...`);
         const { data: swapResult } = await axios.post('https://lite-api.jup.ag/swap/v1/swap', {
             userPublicKey: wallet.publicKey.toBase58(),
             quoteResponse: quoteResponse.data,
             wrapAndUnwrapSol: true,
-            dynamicComputeUnitLimit: true, // Optimiza compute units
-            dynamicSlippage: true, // Ajusta slippage dinámicamente
-            prioritizationFeeLamports: 'auto', // Priority fees automáticos
+            dynamicComputeUnitLimit: true, // Optimizes compute units
+            dynamicSlippage: true, // Adjusts slippage dynamically
+            prioritizationFeeLamports: 'auto', // Automatic priority fees
         });
 
         if (!swapResult.swapTransaction) {
-            logger.error('No se recibió una transacción válida del endpoint de swap.');
+            logger.error('Did not receive a valid transaction from swap endpoint.');
             return false;
         }
 
-        logger.info('3. Firmando y enviando transacción...');
+        logger.info('3. Signing and sending transaction...');
         const swapTransactionBuf = Buffer.from(swapResult.swapTransaction, 'base64');
         let transaction;
 
@@ -87,37 +87,36 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
             maxRetries: 3,
         });
 
-        logger.info(`4. Transacción enviada: ${txid}. Esperando confirmación...`);
+        logger.info(`4. Transaction sent: ${txid}. Waiting for confirmation...`);
         await connection.confirmTransaction(txid, 'confirmed');
 
-        logger.info(`✅ ¡SWAP EXITOSO! Ver en Solscan: https://solscan.io/tx/${txid}`);
+        logger.info(`✅ SWAP SUCCESSFUL! View on Solscan: https://solscan.io/tx/${txid}`);
         return true;
 
     } catch (error: any) {
-        logger.error(`💥 ERROR al ejecutar el swap para ${outputMint}.`);
+        logger.error(`💥 ERROR executing swap for ${outputMint}.`);
         if (error.response) {
-            logger.error(`[Error de Jupiter API]:`);
+            logger.error(`[Jupiter API Error]:`);
             logger.error(`Status: ${error.response.status}`);
             logger.error(`Data: ${JSON.stringify(error.response.data, null, 2)}`);
         } else if (error.message) {
-            logger.error(`[Error General]: ${error.message}`);
+            logger.error(`[General Error]: ${error.message}`);
             if (error.logs) {
                 logger.error(`[Transaction Logs]: ${JSON.stringify(error.logs, null, 2)}`);
             }
         }
         sendTradeNotification({
-            asset: 'SISTEMA',
-            action: 'VENTA',
+            asset: 'SYSTEM',
+            action: 'SELL',
             price: 0,
-            reason: `Error en swap: ${error.response?.data || error.message}`
+            reason: `Swap error: ${error.response?.data || error.message}`
         });
         return false;
     }
 }
 
-// ... (El resto de las funciones: executeBuyOrder, getTokenBalance, executeSellOrder no necesitan cambios)
 /**
- * Ejecuta una orden de compra REAL.
+ * Executes a REAL buy order.
  */
 export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number): Promise<void> {
     const amountInSmallestUnit = Math.floor(amountUSDC * Math.pow(10, 6));
@@ -136,9 +135,9 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
         const assetConfig = assetsToTrade.find(a => a.mint === assetMint);
         sendTradeNotification({
             asset: assetConfig?.name || assetMint,
-            action: 'COMPRA',
+            action: 'BUY',
             price: price,
-            reason: 'Señal de estrategia confirmada.'
+            reason: 'Strategy signal confirmed.'
         });
     }
 }
@@ -152,12 +151,12 @@ async function getTokenBalance(wallet: Keypair, connection: Connection, mint: Pu
 }
 
 /**
- * Ejecuta una orden de venta REAL.
+ * Executes a REAL sell order.
  */
 export async function executeSellOrder(position: OpenPosition): Promise<void> {
     const privateKey = process.env.PRIVATE_KEY;
     if (!privateKey) {
-        logger.error('No se puede vender sin clave privada.');
+        logger.error('Cannot sell without private key.');
         return;
     }
     const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
@@ -168,11 +167,11 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
     try {
         const amountToSell = await getTokenBalance(wallet, connection, new PublicKey(position.asset));
         if (amountToSell === 0) {
-            logger.warn(`Intento de venta de ${assetName} pero no se encontró balance.`);
+            logger.warn(`Attempted to sell ${assetName} but no balance found.`);
             openPositions = openPositions.filter(p => p.id !== position.id);
             return;
         }
-        
+
         const success = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false);
 
         if (success) {
@@ -182,12 +181,12 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
 
             sendTradeNotification({
                 asset: assetName,
-                action: 'VENTA',
+                action: 'SELL',
                 price: currentPrice,
                 pnl: pnl
             });
         }
     } catch (error) {
-        logger.error(`Error crítico en el proceso de venta de ${assetName}:`, error);
+        logger.error(`Critical error in sell process for ${assetName}:`, error);
     }
 }

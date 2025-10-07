@@ -13,6 +13,8 @@
     "test:executor": "node --loader ts-node/esm src/tests/order_executor.test.ts",
     "test:manual": "node --loader ts-node/esm src/tests/manual_trade.test.ts",
     "test:e2e": "node --loader ts-node/esm src/tests/e2e_trade.test.ts",
+    "test:price": "node --loader ts-node/esm src/tests/price_check.test.ts",
+    "test:buy": "node --loader ts-node/esm src/tests/manual_buy.test.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
