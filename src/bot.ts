@@ -1,7 +1,7 @@
 // src/bot.ts
 
 import { logger } from './services.js';
-import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, USDC_MINT, marketFilterConfig } from './config.js';
+import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, POSITION_CHECK_INTERVAL, USDC_MINT, marketFilterConfig } from './config.js';
 import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from './data_extractor/jupiter.js';
 import { runStrategy } from './strategy_analyzer/logic.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
@@ -118,8 +118,8 @@ async function checkOpenPositions() {
             // Update highest price
             position.highestPrice = Math.max(position.highestPrice || currentPrice, currentPrice);
 
-            // Trail 2% below highest price
-            const trailingStopPrice = position.highestPrice * 0.98;
+            // Trail 3% below highest price (increased from 2% to reduce premature exits)
+            const trailingStopPrice = position.highestPrice * 0.97;
 
             if (currentPrice < trailingStopPrice) {
                 logger.info(`Trailing stop hit for ${assetConfig.name}! High: ${position.highestPrice.toFixed(6)}, Current: ${currentPrice.toFixed(6)}`);
@@ -200,6 +200,26 @@ async function findNewOpportunities(marketHealthIndex: number) {
     return buySignals;
 }
 
+/**
+ * Lightweight position monitoring loop - runs every 15 minutes
+ * Only checks positions when they exist (no market analysis)
+ */
+async function positionMonitoringLoop() {
+    while (true) {
+        try {
+            const openPositions = getOpenPositions();
+            if (openPositions.length > 0) {
+                logger.info(`[Position Monitor] Checking ${openPositions.length} open positions...`);
+                await checkOpenPositions();
+            }
+        } catch (error) {
+            logger.error('[Position Monitor] Error checking positions:', getErrorMessage(error));
+        }
+
+        await sleep(POSITION_CHECK_INTERVAL);
+    }
+}
+
 async function main() {
     try {
         // Validate environment variables
@@ -216,6 +236,11 @@ async function main() {
         await initializeTrader();
 
         sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
+
+        // Start position monitoring loop in background
+        positionMonitoringLoop().catch(error => {
+            logger.error('[Position Monitor] Fatal error:', getErrorMessage(error));
+        });
 
         while (true) {
             const cycleStartTime = Date.now();

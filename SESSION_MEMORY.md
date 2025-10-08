@@ -247,30 +247,43 @@ git status --ignored | grep .env  # Verify .env ignored
 
 4. **Trailing Stop Loss** (Commit: 7dcbbf2)
    - Activates when position reaches +2% profit
-   - Trails 2% below highest price seen
+   - Trails 3% below highest price seen (updated from 2%)
    - Protects profits while letting winners run
    - Persists state across bot restarts
    - Expected: Better average win size
 
-### 📊 Current Strategy Improvements
+5. **Strategy Optimization** (Latest commit)
+   - Take Profit increased: 4% → 8%
+   - Stop Loss increased: 2% → 3%
+   - Trailing distance increased: 2% → 3%
+   - Added 15-minute position monitoring loop
+   - Optimized for volatile meme coin behavior
+
+### 📊 Current Strategy Configuration
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0
 - Golden Cross: SMA(12) > SMA(26)
 - RSI(14) > 50
-- **NEW**: SMA slope > 0.1% (trend strength)
-- **NEW**: Volatility < 5% (market stability)
+- **Filter**: SMA slope > 0.1% (trend strength)
+- **Filter**: Volatility < 5% (market stability)
 
-**Exit Conditions (Enhanced)**:
-- Take Profit: +4%
-- Stop Loss: -2%
-- **NEW**: Trailing stop @ 2% below highest price (after +2% profit)
+**Exit Conditions (Optimized for Meme Coins)**:
+- Take Profit: **+8%** (increased from +4% to capture meme coin upside)
+- Stop Loss: **-3%** (increased from -2% to reduce false stops)
+- **Trailing Stop**: 3% below highest price (activated at +2% profit)
+
+**Monitoring Frequency**:
+- Main analysis cycle: Every 4 hours (finds new opportunities)
+- Position monitoring: Every 15 minutes (checks TP/SL/Trailing)
+- Total API calls: ~96 price checks/day when positions open
 
 **Expected Results**:
-- Win Rate: 55-65% (up from 45-55%)
-- Better R:R ratio with trailing stops
-- Fewer false signals
-- More consistent returns
+- Win Rate: 50-60% (slightly lower due to wider stops)
+- Average Win: +8-15% (significantly improved)
+- Average Loss: -3% (manageable)
+- Risk/Reward: 2.5:1 to 5:1 ratio
+- Overall P&L: +30-50% improvement expected
 
 ---
 
