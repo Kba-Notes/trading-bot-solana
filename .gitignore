@@ -46,6 +46,8 @@ wallet.json
 private-key.txt
 credentials.json
 secrets.json
+.github-credentials
+.claude-context
 
 # Temporary files
 *.tmp
