@@ -4,18 +4,30 @@ import { logger } from './services.js';
 import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, USDC_MINT, marketFilterConfig } from './config.js';
 import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from './data_extractor/jupiter.js';
 import { runStrategy } from './strategy_analyzer/logic.js';
-import { executeBuyOrder, executeSellOrder, getOpenPositions } from './order_executor/trader.js';
+import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
 import { sendMessage } from './notifier/telegram.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
+import { sleep, executeWithTiming } from './utils/async.js';
+import { API_DELAYS, BOT_CONSTANTS } from './constants.js';
+import { validateEnvironment } from './config/env-validator.js';
+import { ShutdownManager } from './utils/shutdown.js';
+import { PerformanceMetrics } from './monitoring/metrics.js';
+import { GoldenCrossStrategy } from './strategy/GoldenCrossStrategy.js';
+import { getErrorMessage, getErrorContext } from './errors/custom-errors.js';
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 let executionCycleCounter = 0;
+const strategy = new GoldenCrossStrategy({
+    shortSMAPeriod: strategyConfig.shortSMAPeriod,
+    longSMAPeriod: strategyConfig.longSMAPeriod,
+    rsiPeriod: strategyConfig.rsiPeriod,
+    rsiThreshold: strategyConfig.rsiThreshold
+});
 
 // Fetches historical price data from CoinGecko
 async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
     try {
-        const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=30&interval=daily`;
+        const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${BOT_CONSTANTS.MARKET_HEALTH_HISTORY_DAYS}&interval=daily`;
         const response = await axios.get(url);
         if (response.data && response.data.prices) {
             return response.data.prices.map((priceEntry: [number, number]) => priceEntry[1]);
@@ -30,9 +42,9 @@ async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
 // Fetches historical price data from Birdeye (used for SOL)
 async function getBirdeyeHistoricalData(mint: string): Promise<number[]> {
     try {
-        const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        const daysAgo = Math.floor((Date.now() - BOT_CONSTANTS.MARKET_HEALTH_HISTORY_DAYS * 24 * 60 * 60 * 1000) / 1000);
         const now = Math.floor(Date.now() / 1000);
-        const url = `https://public-api.birdeye.so/defi/history_price?address=${mint}&address_type=token&type=1D&time_from=${thirtyDaysAgo}&time_to=${now}`;
+        const url = `https://public-api.birdeye.so/defi/history_price?address=${mint}&address_type=token&type=1D&time_from=${daysAgo}&time_to=${now}`;
         const headers = {'X-API-KEY': process.env.BIRDEYE_API_KEY};
         const response = await axios.get(url, { headers });
         if (response.data && response.data.data.items) {
@@ -69,8 +81,8 @@ async function calculateMarketHealth(): Promise<number> {
         weightedDistanceSum += distance * asset.weight;
 
         logger.info(`  - ${asset.name}: Price=${currentPrice.toFixed(2)}, SMA20=${sma.toFixed(2)}, Distance=${distance.toFixed(2)}%`);
-        // Increase pause to be respectful with free APIs
-        await sleep(2000);
+        // Pause to be respectful with free APIs
+        await sleep(API_DELAYS.MARKET_DATA_API);
     }
     logger.info(`Final Market Health Index: ${weightedDistanceSum.toFixed(2)}`);
     return weightedDistanceSum;
@@ -107,7 +119,7 @@ async function checkOpenPositions() {
         if (shouldSell) {
             await executeSellOrder(position);
         }
-        await sleep(1100);
+        await sleep(API_DELAYS.RATE_LIMIT);
     }
 }
 
@@ -130,9 +142,9 @@ async function findNewOpportunities(marketHealthIndex: number) {
         }
 
         const historicalPrices = await getJupiterHistoricalData(asset.mint, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
-        if (historicalPrices.length < 50) {
+        if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
             logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
-            await sleep(1100);
+            await sleep(API_DELAYS.RATE_LIMIT);
             continue;
         }
 
@@ -153,40 +165,84 @@ async function findNewOpportunities(marketHealthIndex: number) {
                 logger.error(`Could not get price to execute buy for ${asset.name}`);
             }
         }
-        await sleep(1100);
+        await sleep(API_DELAYS.RATE_LIMIT);
     }
 }
 
 async function main() {
-    logger.info('🚀🚀🚀 Trading Bot Started (v2 with Market Filter) 🚀🚀🚀');
-    sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
+    try {
+        // Validate environment variables
+        logger.info('Validating environment configuration...');
+        validateEnvironment();
 
-    while (true) {
-        try {
-            logger.info('--- New analysis cycle started ---');
+        // Initialize shutdown handlers
+        logger.info('Initializing graceful shutdown handlers...');
+        ShutdownManager.initialize();
 
-            const marketHealthIndex = await calculateMarketHealth();
+        logger.info('🚀🚀🚀 Trading Bot Started (v2 with Market Filter) 🚀🚀🚀');
 
-            await checkOpenPositions();
+        // Initialize trader and load persisted positions
+        await initializeTrader();
 
-            await findNewOpportunities(marketHealthIndex);
+        sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
 
-            executionCycleCounter++;
-            logger.info(`Execution cycle number ${executionCycleCounter}.`);
+        while (true) {
+            const cycleStartTime = Date.now();
 
-            if (executionCycleCounter >= 6) {
-                const openPositions = getOpenPositions();
-                sendMessage(`❤️ **Heartbeat**\nBot is still active.\nOpen positions: ${openPositions.length}\nMarket Index: \`${marketHealthIndex.toFixed(2)}\``);
-                executionCycleCounter = 0;
+            try {
+                logger.info('--- New analysis cycle started ---');
+
+                const marketHealthIndex = await calculateMarketHealth();
+
+                await checkOpenPositions();
+
+                await findNewOpportunities(marketHealthIndex);
+
+                executionCycleCounter++;
+                logger.info(`Execution cycle number ${executionCycleCounter}.`);
+
+                if (executionCycleCounter >= BOT_CONSTANTS.HEARTBEAT_CYCLE_COUNT) {
+                    const openPositions = getOpenPositions();
+
+                    // Include performance metrics in heartbeat
+                    const metrics = PerformanceMetrics.getSummary();
+                    sendMessage(
+                        `❤️ **Heartbeat**\n` +
+                        `Bot is still active.\n` +
+                        `Open positions: ${openPositions.length}\n` +
+                        `Market Index: \`${marketHealthIndex.toFixed(2)}\`\n` +
+                        `Uptime: ${metrics.uptime}\n` +
+                        `API Success Rate: ${metrics.apiCalls.successRate}`
+                    );
+
+                    // Log performance metrics
+                    PerformanceMetrics.logSummary();
+
+                    executionCycleCounter = 0;
+                }
+
+                // Record cycle execution time
+                const cycleDuration = Date.now() - cycleStartTime;
+                PerformanceMetrics.recordAnalysisLoop(cycleDuration);
+
+                logger.info(`--- Analysis cycle finished. Sleeping for ${BOT_EXECUTION_INTERVAL / 1000 / 60} minutes... ---`);
+            } catch (error) {
+                const errorMsg = getErrorMessage(error);
+                const errorCtx = getErrorContext(error);
+
+                logger.error('💥 Unexpected error in main loop:', errorCtx);
+                PerformanceMetrics.recordError(errorMsg);
+
+                sendMessage('❌ **CRITICAL ERROR!**\nThe bot encountered an unexpected error. Check the logs.');
             }
 
-            logger.info(`--- Analysis cycle finished. Sleeping for ${BOT_EXECUTION_INTERVAL / 1000 / 60} minutes... ---`);
-        } catch (error) {
-            logger.error('💥 Unexpected error in main loop:', error);
-            sendMessage('❌ **CRITICAL ERROR!**\nThe bot encountered an unexpected error. Check the logs.');
+            await sleep(BOT_EXECUTION_INTERVAL);
         }
-
-        await sleep(BOT_EXECUTION_INTERVAL);
+    } catch (startupError) {
+        const errorMsg = getErrorMessage(startupError);
+        logger.error('Failed to start bot:', getErrorContext(startupError));
+        sendMessage(`🛑 **Bot Failed to Start**\n${errorMsg}`);
+        process.exit(1);
     }
 }
 
