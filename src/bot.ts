@@ -107,13 +107,39 @@ async function checkOpenPositions() {
         const takeProfitPrice = position.entryPrice * (1 + strategyConfig.takeProfitPercentage);
         const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
 
+        // Trailing stop logic: Activate when in 2% profit
+        const profitThreshold = position.entryPrice * 1.02;
+        if (currentPrice >= profitThreshold) {
+            if (!position.trailingStopActive) {
+                position.trailingStopActive = true;
+                logger.info(`Trailing stop activated for ${assetConfig.name} at ${currentPrice.toFixed(6)}`);
+            }
+
+            // Update highest price
+            position.highestPrice = Math.max(position.highestPrice || currentPrice, currentPrice);
+
+            // Trail 2% below highest price
+            const trailingStopPrice = position.highestPrice * 0.98;
+
+            if (currentPrice < trailingStopPrice) {
+                logger.info(`Trailing stop hit for ${assetConfig.name}! High: ${position.highestPrice.toFixed(6)}, Current: ${currentPrice.toFixed(6)}`);
+                await executeSellOrder(position);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+        }
+
         let shouldSell = false;
+        let sellReason = '';
+
         if (currentPrice >= takeProfitPrice) {
             logger.info(`TAKE PROFIT reached for ${assetConfig.name}!`);
             shouldSell = true;
+            sellReason = 'Take Profit';
         } else if (currentPrice <= stopLossPrice) {
             logger.info(`STOP LOSS reached for ${assetConfig.name}!`);
             shouldSell = true;
+            sellReason = 'Stop Loss';
         }
 
         if (shouldSell) {

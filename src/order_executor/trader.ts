@@ -20,6 +20,8 @@ export interface OpenPosition {
     entryPrice: number;
     amount: number;
     timestamp: Date;
+    highestPrice?: number; // Track highest price for trailing stop
+    trailingStopActive?: boolean; // Whether trailing stop is activated
 }
 
 let openPositions: OpenPosition[] = [];

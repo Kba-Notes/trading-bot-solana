@@ -22,6 +22,8 @@ export interface OpenPosition {
     entryPrice: number;
     amount: number;
     timestamp: Date;
+    highestPrice?: number;
+    trailingStopActive?: boolean;
 }
 
 /**
