@@ -1,11 +1,53 @@
-# Dependencias
-node_modules
-
-# Ficheros de compilación
-dist
-
-# Ficheros de log
-*.log
-
-# Ficheros de entorno con secretos
+# Environment variables (CRITICAL - NEVER COMMIT!)
 .env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime data (positions, balances, etc.)
+data/
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+.pm2/
+trading-bot.log
+
+# Testing
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sensitive files (CRITICAL - NEVER COMMIT!)
+*.key
+*.pem
+wallet.json
+private-key.txt
+credentials.json
+secrets.json
+
+# Temporary files
+*.tmp
+.cache/
+tmp/
