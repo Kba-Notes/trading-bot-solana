@@ -5,7 +5,7 @@ import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, USDC_MINT, marke
 import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from './data_extractor/jupiter.js';
 import { runStrategy } from './strategy_analyzer/logic.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
-import { sendMessage } from './notifier/telegram.js';
+import { sendMessage, sendAnalysisSummary, sendPositionCheck } from './notifier/telegram.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
 import { sleep, executeWithTiming } from './utils/async.js';
@@ -132,8 +132,10 @@ async function findNewOpportunities(marketHealthIndex: number) {
 
     if (marketHealthIndex <= 0) {
         logger.info('Negative market filter. Buying disabled for this cycle.');
-        return;
+        return 0; // Return buy signals count
     }
+
+    let buySignals = 0;
 
     for (const asset of assetsToTrade) {
         if (openPositions.some(p => p.asset === asset.mint)) {
@@ -158,6 +160,7 @@ async function findNewOpportunities(marketHealthIndex: number) {
         }
 
         if (decision.action === 'BUY') {
+            buySignals++;
             const currentPrice = await getCurrentPrice(asset.mint);
             if (currentPrice) {
                 await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
@@ -167,6 +170,8 @@ async function findNewOpportunities(marketHealthIndex: number) {
         }
         await sleep(API_DELAYS.RATE_LIMIT);
     }
+
+    return buySignals;
 }
 
 async function main() {
@@ -196,10 +201,20 @@ async function main() {
 
                 await checkOpenPositions();
 
-                await findNewOpportunities(marketHealthIndex);
+                const buySignals = await findNewOpportunities(marketHealthIndex);
 
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
+
+                // Send analysis summary after each cycle
+                const openPositions = getOpenPositions();
+                sendAnalysisSummary({
+                    marketHealth: marketHealthIndex,
+                    assetsAnalyzed: assetsToTrade.length,
+                    buySignals,
+                    openPositions: openPositions.length,
+                    cycleNumber: executionCycleCounter
+                });
 
                 if (executionCycleCounter >= BOT_CONSTANTS.HEARTBEAT_CYCLE_COUNT) {
                     const openPositions = getOpenPositions();
