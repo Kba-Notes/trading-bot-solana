@@ -138,6 +138,26 @@ export class GoldenCrossStrategy {
         // Update state
         this.lastCrossState.set(assetId, currentState);
 
+        // Volatility filter - check if market is too choppy
+        const recentPrices = prices.slice(-20);
+        if (recentPrices.length >= 20) {
+            const priceChanges = recentPrices.map((p, i, arr) =>
+                i > 0 ? Math.abs((p - arr[i - 1]) / arr[i - 1]) : 0
+            );
+            const avgVolatility = priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
+            const maxVolatility = 0.05; // 5% average daily volatility threshold
+
+            if (avgVolatility > maxVolatility) {
+                return {
+                    decision: {
+                        action: 'HOLD',
+                        reason: `High volatility detected (${(avgVolatility * 100).toFixed(2)}% > ${(maxVolatility * 100).toFixed(0)}%)`
+                    },
+                    indicators
+                };
+            }
+        }
+
         // Decision logic
         if (marketHealthIndex <= this.config.marketHealthThreshold) {
             return {
@@ -151,10 +171,24 @@ export class GoldenCrossStrategy {
 
         if (freshGoldenCross || crossDetected) {
             if (currentRSI > this.config.rsiThreshold) {
+                // Calculate trend strength (SMA slope)
+                const smaSlope = (currentSMA12 - prevSMA12) / prevSMA12;
+                const minSlope = 0.001; // 0.1% minimum slope requirement
+
+                if (smaSlope < minSlope) {
+                    return {
+                        decision: {
+                            action: 'HOLD',
+                            reason: `Golden Cross but trend weak (slope: ${(smaSlope * 100).toFixed(3)}% < ${(minSlope * 100).toFixed(1)}%)`
+                        },
+                        indicators
+                    };
+                }
+
                 return {
                     decision: {
                         action: 'BUY',
-                        reason: `Golden Cross detected with RSI ${currentRSI.toFixed(2)}`
+                        reason: `Golden Cross with strong trend (RSI: ${currentRSI.toFixed(2)}, Slope: ${(smaSlope * 100).toFixed(3)}%)`
                     },
                     indicators
                 };
