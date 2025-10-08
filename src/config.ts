@@ -28,6 +28,11 @@ export const strategyConfig = {
     tradeAmountUSDC: 500,
     takeProfitPercentage: 0.04,
     stopLossPercentage: 0.02,
+    // Strategy-specific parameters
+    shortSMAPeriod: 12,
+    longSMAPeriod: 26,
+    rsiPeriod: 14,
+    rsiThreshold: 50,
 };
 
 export const BOT_EXECUTION_INTERVAL = 4 * 60 * 60 * 1000;
