@@ -7,6 +7,12 @@ import bs58 from 'bs58';
 import axios from 'axios';
 import { assetsToTrade, USDC_MINT } from '../config.js';
 import { getCurrentPrice } from '../data_extractor/jupiter.js';
+import { validateSolanaAddress, validateTradeAmount, validatePrice, validatePositionLimit } from '../utils/validation.js';
+import { SOLANA_CONSTANTS, TRADING_LIMITS } from '../constants.js';
+import { savePositions, loadPositions } from '../persistence/positions.js';
+import { retryWithBackoff } from '../utils/async.js';
+import { PerformanceMetrics } from '../monitoring/metrics.js';
+import { TradeExecutionError, getErrorMessage } from '../errors/custom-errors.js';
 
 export interface OpenPosition {
     id: number;
@@ -18,6 +24,30 @@ export interface OpenPosition {
 
 let openPositions: OpenPosition[] = [];
 let nextPositionId = 1;
+
+/**
+ * Initializes the trader by loading persisted positions from disk
+ * Should be called once at bot startup
+ */
+export async function initializeTrader(): Promise<void> {
+    try {
+        openPositions = await loadPositions();
+
+        // Set next position ID to avoid conflicts
+        if (openPositions.length > 0) {
+            nextPositionId = Math.max(...openPositions.map(p => p.id)) + 1;
+        }
+
+        logger.info('Trader initialized', {
+            loadedPositions: openPositions.length,
+            nextPositionId
+        });
+    } catch (error) {
+        const err = error as Error;
+        logger.error('Failed to initialize trader', { error: err.message });
+        throw error;
+    }
+}
 
 export function getOpenPositions(): OpenPosition[] {
     return openPositions;
@@ -117,10 +147,28 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
 
 /**
  * Executes a REAL buy order.
+ *
+ * @param assetMint The Solana mint address of the asset to buy
+ * @param amountUSDC Amount in USDC to trade
+ * @param price Current price for position tracking
+ * @throws Error if validation fails or position limit exceeded
  */
 export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number): Promise<void> {
-    const amountInSmallestUnit = Math.floor(amountUSDC * Math.pow(10, 6));
+    // Validate inputs
+    validateSolanaAddress(assetMint, 'assetMint');
+    validateSolanaAddress(USDC_MINT, 'USDC_MINT');
+    validateTradeAmount(amountUSDC, 'amountUSDC');
+    validatePrice(price, 'price');
+    validatePositionLimit(openPositions.length);
+
+    const amountInSmallestUnit = Math.floor(amountUSDC * Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS));
+    const swapStartTime = Date.now();
     const success = await performJupiterSwap(USDC_MINT, assetMint, amountInSmallestUnit, true);
+    const swapDuration = Date.now() - swapStartTime;
+
+    // Record metrics
+    PerformanceMetrics.recordSwapTime(swapDuration);
+    PerformanceMetrics.recordTrade('BUY', success);
 
     if (success) {
         const position: OpenPosition = {
@@ -131,6 +179,9 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
             timestamp: new Date()
         };
         openPositions.push(position);
+
+        // Persist positions to disk
+        await savePositions(openPositions);
 
         const assetConfig = assetsToTrade.find(a => a.mint === assetMint);
         sendTradeNotification({
@@ -152,8 +203,16 @@ async function getTokenBalance(wallet: Keypair, connection: Connection, mint: Pu
 
 /**
  * Executes a REAL sell order.
+ *
+ * @param position The position to sell
+ * @throws Error if private key not found
  */
 export async function executeSellOrder(position: OpenPosition): Promise<void> {
+    // Validate position data
+    validateSolanaAddress(position.asset, 'position.asset');
+    validatePrice(position.entryPrice, 'position.entryPrice');
+    validateTradeAmount(position.amount, 'position.amount');
+
     const privateKey = process.env.PRIVATE_KEY;
     if (!privateKey) {
         logger.error('Cannot sell without private key.');
@@ -169,13 +228,22 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
         if (amountToSell === 0) {
             logger.warn(`Attempted to sell ${assetName} but no balance found.`);
             openPositions = openPositions.filter(p => p.id !== position.id);
+            await savePositions(openPositions);
             return;
         }
 
+        const swapStartTime = Date.now();
         const success = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false);
+        const swapDuration = Date.now() - swapStartTime;
+
+        // Record metrics
+        PerformanceMetrics.recordSwapTime(swapDuration);
+        PerformanceMetrics.recordTrade('SELL', success);
 
         if (success) {
             openPositions = openPositions.filter(p => p.id !== position.id);
+            await savePositions(openPositions);
+
             const currentPrice = await getCurrentPrice(position.asset) || position.entryPrice;
             const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
 
