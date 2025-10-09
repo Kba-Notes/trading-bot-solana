@@ -252,12 +252,19 @@ git status --ignored | grep .env  # Verify .env ignored
    - Persists state across bot restarts
    - Expected: Better average win size
 
-5. **Strategy Optimization** (Latest commit)
+5. **Strategy Optimization** (Commits: 9241ae7, f37baf3)
    - Take Profit increased: 4% → 8%
    - Stop Loss increased: 2% → 3%
    - Trailing distance increased: 2% → 3%
    - Added 15-minute position monitoring loop
    - Optimized for volatile meme coin behavior
+   - Created CHANGELOG.md and updated README.md
+
+6. **Timeframe Optimization** (Latest commit)
+   - Timeframe changed: 4h → 1h for faster signal detection
+   - Execution interval: 4 hours → 1 hour (24 checks/day)
+   - Better responsiveness for volatile meme coins
+   - Catches golden cross signals much faster
 
 ### 📊 Current Strategy Configuration
 
@@ -274,9 +281,10 @@ git status --ignored | grep .env  # Verify .env ignored
 - **Trailing Stop**: 3% below highest price (activated at +2% profit)
 
 **Monitoring Frequency**:
-- Main analysis cycle: Every 4 hours (finds new opportunities)
+- Main analysis cycle: Every 1 hour (finds new opportunities) - 24 checks/day
 - Position monitoring: Every 15 minutes (checks TP/SL/Trailing)
-- Total API calls: ~96 price checks/day when positions open
+- Timeframe: 1-hour candles (optimized for meme coin volatility)
+- Total API calls: ~120 analysis calls/day + ~96 position checks when open
 
 **Expected Results**:
 - Win Rate: 50-60% (slightly lower due to wider stops)

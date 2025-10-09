@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2025-10-09
+
+### Changed
+- **Timeframe optimization: 4-hour → 1-hour candles** - Faster signal detection for volatile meme coins
+- **Execution interval: 4 hours → 1 hour** - Bot now analyzes opportunities 24 times/day instead of 6
+- **Better entry timing** - Catches Golden Cross signals within 1 hour instead of waiting up to 4 hours
+
+### Improved
+- Significantly faster market entry during bullish runs
+- More trading opportunities without sacrificing signal quality
+- Better suited for meme coin volatility patterns
+- Increased responsiveness while maintaining technical analysis integrity
+
 ## [2.1.0] - 2025-10-08
 
 ### Added
@@ -75,13 +88,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
+- **v2.2.0** - Timeframe optimization (1-hour candles for faster entries)
 - **v2.1.0** - Strategy optimization (filters, trailing stops, monitoring frequency)
 - **v2.0.0** - Market filter + infrastructure improvements (persistence, metrics, error handling)
 - **v1.0.0** - Initial bot with Golden Cross strategy
 
 ---
 
-[Unreleased]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/Kba-Notes/trading-bot-solana/releases/tag/v1.0.0

@@ -23,11 +23,11 @@ export const assetsToTrade = [
 ];
 
 export const strategyConfig = {
-    timeframe: '4h' as const,
+    timeframe: '1h' as const,      // Changed from 4h to 1h for faster meme coin signals
     historicalDataLimit: 100,
     tradeAmountUSDC: 500,
-    takeProfitPercentage: 0.08,    // Increased from 4% to 8% for better meme coin upside capture
-    stopLossPercentage: 0.03,      // Increased from 2% to 3% to reduce false stops
+    takeProfitPercentage: 0.08,    // 8% take profit for meme coin upside capture
+    stopLossPercentage: 0.03,      // 3% stop loss to reduce false stops
     // Strategy-specific parameters
     shortSMAPeriod: 12,
     longSMAPeriod: 26,
@@ -35,5 +35,5 @@ export const strategyConfig = {
     rsiThreshold: 50,
 };
 
-export const BOT_EXECUTION_INTERVAL = 4 * 60 * 60 * 1000;        // 4 hours - main analysis cycle
+export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;        // 1 hour - main analysis cycle (24 checks/day)
 export const POSITION_CHECK_INTERVAL = 15 * 60 * 1000;            // 15 minutes - position monitoring

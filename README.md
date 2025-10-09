@@ -6,7 +6,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Core Trading
 - **Automated Trading:** Executes buy and sell orders on Solana DEXs without manual intervention
-- **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 4-hour timeframe
+- **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 1-hour timeframe
 - **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends to protect capital during bearish markets
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, JTO, WIF, PENG, BONK)
 
@@ -22,7 +22,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Monitoring & Alerts
 - **Dual-Speed Monitoring:**
-  - Main analysis cycle: Every 4 hours (finds new opportunities)
+  - Main analysis cycle: Every 1 hour (finds new opportunities) - 24 checks/day
   - Position monitoring: Every 15 minutes (fast TP/SL execution)
 - **Enhanced Telegram Notifications:**
   - Detailed trade alerts with entry price, indicators, and P&L
@@ -81,7 +81,7 @@ Configure trading behavior in `src/config.ts`:
 
 ```typescript
 export const strategyConfig = {
-    timeframe: '4h',
+    timeframe: '1h',                // 1-hour candles for faster signals
     tradeAmountUSDC: 500,           // Amount per trade
     takeProfitPercentage: 0.08,     // 8% take profit
     stopLossPercentage: 0.03,       // 3% stop loss
@@ -92,7 +92,7 @@ export const strategyConfig = {
 };
 
 // Monitoring intervals
-export const BOT_EXECUTION_INTERVAL = 4 * 60 * 60 * 1000;  // 4 hours
+export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;   // 1 hour (24 checks/day)
 export const POSITION_CHECK_INTERVAL = 15 * 60 * 1000;      // 15 minutes
 ```
 
@@ -172,7 +172,7 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.1.0
+**Current Version:** 2.2.0
 
 ## Disclaimer
 
