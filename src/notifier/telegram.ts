@@ -120,7 +120,7 @@ ${healthIcon} *Market Health:* \`${update.marketHealth.toFixed(2)}%\`
 📈 *Buy Signals:* \`${update.buySignals}\`
 💼 *Open Positions:* \`${update.openPositions}\`
 
-_Next analysis in 4 hours..._
+_Next analysis in 1 hour..._
 `;
 
     sendMessage(message);

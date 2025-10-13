@@ -16,8 +16,8 @@ export const API_DELAYS = {
 
 // Bot Behavior
 export const BOT_CONSTANTS = {
-    /** Number of execution cycles before sending a heartbeat message (6 cycles = 24 hours) */
-    HEARTBEAT_CYCLE_COUNT: 6,
+    /** Number of execution cycles before sending a heartbeat message (24 cycles = 24 hours with 1h interval) */
+    HEARTBEAT_CYCLE_COUNT: 24,
     
     /** Minimum number of historical data points required for strategy analysis */
     MIN_HISTORICAL_DATA_POINTS: 50,
