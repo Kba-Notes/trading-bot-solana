@@ -120,10 +120,46 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
         });
 
         logger.info(`4. Transaction sent: ${txid}. Waiting for confirmation...`);
-        await connection.confirmTransaction(txid, 'confirmed');
 
-        logger.info(`✅ SWAP SUCCESSFUL! View on Solscan: https://solscan.io/tx/${txid}`);
-        return true;
+        // Enhanced confirmation with timeout handling
+        try {
+            // Wait up to 60 seconds for confirmation (increased from default 30s)
+            const latestBlockhash = await connection.getLatestBlockhash();
+            const confirmation = await connection.confirmTransaction({
+                signature: txid,
+                blockhash: latestBlockhash.blockhash,
+                lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+            }, 'confirmed');
+
+            if (confirmation.value.err) {
+                logger.error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                return false;
+            }
+
+            logger.info(`✅ SWAP SUCCESSFUL! View on Solscan: https://solscan.io/tx/${txid}`);
+            return true;
+        } catch (confirmError: any) {
+            // Transaction might have succeeded even if confirmation timed out
+            logger.warn(`Confirmation timeout for ${txid}. Checking transaction status...`);
+
+            // Check if transaction actually succeeded
+            try {
+                const status = await connection.getSignatureStatus(txid);
+                if (status.value?.confirmationStatus === 'confirmed' || status.value?.confirmationStatus === 'finalized') {
+                    logger.info(`✅ Transaction ${txid} confirmed successfully (verified after timeout)`);
+                    return true;
+                } else if (status.value?.err) {
+                    logger.error(`Transaction ${txid} failed: ${JSON.stringify(status.value.err)}`);
+                    return false;
+                } else {
+                    logger.error(`Transaction ${txid} status unknown - may need manual verification`);
+                    return false;
+                }
+            } catch (statusError) {
+                logger.error(`Failed to verify transaction status: ${statusError}`);
+                return false;
+            }
+        }
 
     } catch (error: any) {
         logger.error(`💥 ERROR executing swap for ${outputMint}.`);
@@ -204,12 +240,16 @@ async function getTokenBalance(wallet: Keypair, connection: Connection, mint: Pu
 }
 
 /**
- * Executes a REAL sell order.
+ * Executes a REAL sell order with retry logic.
  *
  * @param position The position to sell
+ * @param retryCount Current retry attempt (used internally)
  * @throws Error if private key not found
  */
-export async function executeSellOrder(position: OpenPosition): Promise<void> {
+export async function executeSellOrder(position: OpenPosition, retryCount: number = 0): Promise<boolean> {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+
     // Validate position data
     validateSolanaAddress(position.asset, 'position.asset');
     validatePrice(position.entryPrice, 'position.entryPrice');
@@ -218,7 +258,7 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
     const privateKey = process.env.PRIVATE_KEY;
     if (!privateKey) {
         logger.error('Cannot sell without private key.');
-        return;
+        return false;
     }
     const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
     const connection = new Connection('https://api.mainnet-beta.solana.com');
@@ -228,11 +268,13 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
     try {
         const amountToSell = await getTokenBalance(wallet, connection, new PublicKey(position.asset));
         if (amountToSell === 0) {
-            logger.warn(`Attempted to sell ${assetName} but no balance found.`);
+            logger.warn(`Attempted to sell ${assetName} but no balance found. Position may have been sold already.`);
             openPositions = openPositions.filter(p => p.id !== position.id);
             await savePositions(openPositions);
-            return;
+            return true; // Consider this a success - position is closed
         }
+
+        logger.info(`🔄 Sell attempt ${retryCount + 1}/${MAX_RETRIES + 1} for ${assetName} (${amountToSell} tokens)`);
 
         const swapStartTime = Date.now();
         const success = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false);
@@ -243,11 +285,14 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
         PerformanceMetrics.recordTrade('SELL', success);
 
         if (success) {
+            // Successfully sold - remove position
+            logger.info(`✅ Sell successful for ${assetName} after ${retryCount + 1} attempt(s)`);
             openPositions = openPositions.filter(p => p.id !== position.id);
             await savePositions(openPositions);
 
             const currentPrice = await getCurrentPrice(position.asset) || position.entryPrice;
             const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
+            const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
 
             sendTradeNotification({
                 asset: assetName,
@@ -255,8 +300,32 @@ export async function executeSellOrder(position: OpenPosition): Promise<void> {
                 price: currentPrice,
                 pnl: pnl
             });
+
+            logger.info(`💰 ${assetName} sold: Entry=$${position.entryPrice.toFixed(6)}, Exit=$${currentPrice.toFixed(6)}, P&L=${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}% (${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)})`);
+
+            return true;
+        } else {
+            // Swap failed - retry if attempts remaining
+            if (retryCount < MAX_RETRIES) {
+                logger.warn(`❌ Sell attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+                return await executeSellOrder(position, retryCount + 1);
+            } else {
+                logger.error(`❌ All ${MAX_RETRIES + 1} sell attempts failed for ${assetName}. Position remains open.`);
+                sendMessage(`⚠️ *CRITICAL: Failed to sell ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts failed. Position remains open. Manual intervention may be required.\n\nPosition: ${assetName}\nEntry: $${position.entryPrice.toFixed(6)}`);
+                return false;
+            }
         }
     } catch (error) {
         logger.error(`Critical error in sell process for ${assetName}:`, error);
+
+        // Retry on critical errors too
+        if (retryCount < MAX_RETRIES) {
+            logger.warn(`Retrying after critical error (${retryCount + 1}/${MAX_RETRIES})...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            return await executeSellOrder(position, retryCount + 1);
+        }
+
+        return false;
     }
 }
