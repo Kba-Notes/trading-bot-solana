@@ -5,7 +5,7 @@ import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, POSITION_CHECK_I
 import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from './data_extractor/jupiter.js';
 import { runStrategy } from './strategy_analyzer/logic.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
-import { sendMessage, sendAnalysisSummary, sendPositionCheck } from './notifier/telegram.js';
+import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
 import { sleep, executeWithTiming } from './utils/async.js';
@@ -266,6 +266,9 @@ async function main() {
             try {
                 logger.info('--- New analysis cycle started ---');
 
+                // Mark the start of this cycle for log tracking
+                markCycleStart();
+
                 const marketHealthIndex = await calculateMarketHealth();
 
                 await checkOpenPositions();
@@ -275,9 +278,9 @@ async function main() {
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
 
-                // Send analysis summary after each cycle
+                // Send analysis summary after each cycle (with log file)
                 const openPositions = getOpenPositions();
-                sendAnalysisSummary({
+                await sendAnalysisSummary({
                     marketHealth: marketHealthIndex,
                     assetsAnalyzed: assetsToTrade.length,
                     buySignals,

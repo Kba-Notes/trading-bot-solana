@@ -1,5 +1,77 @@
 // src/notifier/telegram.ts
 import { logger, bot, chatId } from '../services.js';
+import fs from 'fs';
+import path from 'path';
+
+// Store the start time of current analysis cycle for log extraction
+let currentCycleStartTime: Date | null = null;
+
+/**
+ * Marks the start of a new analysis cycle for log tracking
+ */
+export function markCycleStart() {
+    currentCycleStartTime = new Date();
+}
+
+/**
+ * Extracts logs from the current cycle and saves to a temp file
+ * @returns Path to the temp file containing cycle logs, or null if failed
+ */
+async function extractCycleLogs(): Promise<string | null> {
+    if (!currentCycleStartTime) {
+        logger.warn('Cannot extract cycle logs: cycle start time not set');
+        return null;
+    }
+
+    try {
+        const logFilePath = path.join(process.cwd(), 'trading-bot.log');
+        const tempLogPath = path.join(process.cwd(), 'temp-cycle-log.txt');
+
+        // Read the log file
+        const logContent = await fs.promises.readFile(logFilePath, 'utf-8');
+        const logLines = logContent.split('\n');
+
+        // Filter logs from current cycle
+        const cycleLogs: string[] = [];
+        const cycleStartTimestamp = currentCycleStartTime.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        for (const line of logLines) {
+            if (!line.trim()) continue;
+
+            try {
+                const logEntry = JSON.parse(line);
+                const logTime = new Date(logEntry.timestamp);
+
+                // Include logs from current cycle onwards
+                if (logTime >= currentCycleStartTime) {
+                    // Format for readability
+                    const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
+                    cycleLogs.push(formattedLine);
+                }
+            } catch (parseError) {
+                // Skip malformed lines
+                continue;
+            }
+        }
+
+        if (cycleLogs.length === 0) {
+            logger.warn('No logs found for current cycle');
+            return null;
+        }
+
+        // Add header
+        const header = `=== Analysis Cycle Logs ===\nCycle Start: ${currentCycleStartTime.toLocaleString()}\nTotal Log Entries: ${cycleLogs.length}\n\n`;
+        const fileContent = header + cycleLogs.join('\n');
+
+        // Write to temp file
+        await fs.promises.writeFile(tempLogPath, fileContent, 'utf-8');
+
+        return tempLogPath;
+    } catch (error) {
+        logger.error('Failed to extract cycle logs:', error);
+        return null;
+    }
+}
 
 /**
  * Sends a text message via Telegram bot.
@@ -108,9 +180,9 @@ export function sendTradeNotification(details: TradeDetails) {
 }
 
 /**
- * Sends analysis cycle summary notification
+ * Sends analysis cycle summary notification with log file attachment
  */
-export function sendAnalysisSummary(update: AnalysisUpdate) {
+export async function sendAnalysisSummary(update: AnalysisUpdate) {
     const healthIcon = update.marketHealth > 0 ? '🟢' : '🔴';
     const message = `
 📊 *Analysis Cycle #${update.cycleNumber}*
@@ -123,7 +195,36 @@ ${healthIcon} *Market Health:* \`${update.marketHealth.toFixed(2)}%\`
 _Next analysis in 1 hour..._
 `;
 
+    // Send the summary message
     sendMessage(message);
+
+    // Extract and send cycle logs as document
+    try {
+        const logFilePath = await extractCycleLogs();
+
+        if (logFilePath && bot && chatId) {
+            const fileName = `cycle-${update.cycleNumber}-${new Date().toISOString().split('T')[0]}.txt`;
+
+            await bot.sendDocument(chatId, logFilePath, {
+                caption: `📄 Detailed logs for Analysis Cycle #${update.cycleNumber}`
+            }, {
+                filename: fileName,
+                contentType: 'text/plain'
+            });
+
+            logger.info(`Sent cycle log file: ${fileName}`);
+
+            // Clean up temp file
+            try {
+                await fs.promises.unlink(logFilePath);
+            } catch (cleanupError) {
+                logger.warn('Failed to cleanup temp log file:', cleanupError);
+            }
+        }
+    } catch (error) {
+        logger.error('Failed to send cycle log file:', error);
+        // Don't fail the whole function if log sending fails
+    }
 }
 
 /**
