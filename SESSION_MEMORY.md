@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-08 (Latest session)
+**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -266,13 +266,16 @@ git status --ignored | grep .env  # Verify .env ignored
    - Better responsiveness for volatile meme coins
    - Catches golden cross signals much faster
 
-7. **GeckoTerminal Integration** (Latest commit - Nov 27, 2025)
+7. **GeckoTerminal Integration** (Commits: 060767e, 598f16f - Oct 27, 2025)
    - **MAJOR**: Replaced Birdeye with GeckoTerminal API
    - Eliminated Birdeye monthly quota limits (30K CUs/month)
    - FREE unlimited usage (30 req/min = 43,200 req/day)
    - All 5 tokens fully supported with pool mappings
-   - API versioning implemented for Beta stability
+   - API versioning implemented for Beta stability (`Accept: application/json;version=20230302`)
+   - Removed BIRDEYE_API_KEY from required environment variables
+   - Updated all documentation (README, CHANGELOG, .env.example)
    - Bot now 100% operational without rate limits
+   - **Status**: ✅ Deployed and running successfully
 
 ### 📊 Current Strategy Configuration
 

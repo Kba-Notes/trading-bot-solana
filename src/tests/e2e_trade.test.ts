@@ -33,19 +33,19 @@ async function performRealSwap(inputMint: string, outputMint: string, amount: nu
 
     try {
         logger.info(`1. Obteniendo cotización para ${amount} lamports de ${inputMint} -> ${outputMint}`);
-        const quoteResponse = await axios.get('https://quote-api.jup.ag/v6/quote', {
-            params: { 
-                inputMint, 
-                outputMint, 
-                amount, 
-                userPublicKey: wallet.publicKey.toBase58(), 
+        const quoteResponse = await axios.get('https://lite-api.jup.ag/v1/quote', {
+            params: {
+                inputMint,
+                outputMint,
+                amount,
+                userPublicKey: wallet.publicKey.toBase58(),
                 slippageBps: 150, // Aumentamos un poco el slippage a 1.5%
                 onlyDirectRoutes: true, // Forzamos rutas directas
             }
         });
 
         logger.info('2. Obteniendo la transacción del swap...');
-        const { data: swapResult } = await axios.post('https://quote-api.jup.ag/v6/swap', {
+        const { data: swapResult } = await axios.post('https://lite-api.jup.ag/v1/swap', {
             userPublicKey: wallet.publicKey.toBase58(),
             quoteResponse: quoteResponse.data,
             wrapAndUnwrapSol: true,
