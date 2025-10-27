@@ -3,12 +3,11 @@
 export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 export const marketFilterConfig = {
-    // Usaremos los IDs de CoinGecko para BTC y ETH
+    // Using CoinGecko IDs for all assets (Birdeye free tier has rate limits)
     assets: [
         { name: 'BTC', id: 'bitcoin', weight: 0.25 },
         { name: 'ETH', id: 'ethereum', weight: 0.25 },
-        // Para SOL usamos su mint address porque lo obtendremos de Birdeye
-        { name: 'SOL', id: 'So11111111111111111111111111111111111111112', weight: 0.50 }
+        { name: 'SOL', id: 'solana', weight: 0.50 }
     ],
     indicatorPeriod: 20,
     timeframe: '1d' as const,

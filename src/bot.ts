@@ -62,12 +62,8 @@ async function calculateMarketHealth(): Promise<number> {
     logger.info('Calculating Market Health Index...');
 
     for (const asset of marketFilterConfig.assets) {
-        let prices: number[] = [];
-        if (asset.name === 'SOL') {
-            prices = await getBirdeyeHistoricalData(asset.id);
-        } else { // For BTC and ETH
-            prices = await getCoingeckoHistoricalData(asset.id);
-        }
+        // Use CoinGecko for all assets (BTC, ETH, SOL)
+        const prices = await getCoingeckoHistoricalData(asset.id);
 
         if (prices.length < marketFilterConfig.indicatorPeriod) {
             logger.warn(`Insufficient data for ${asset.name} in market filter.`);
