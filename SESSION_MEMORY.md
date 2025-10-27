@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration + Position monitoring + Sell retry logic)
+**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration + Position monitoring + Sell retry logic + Log attachments)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -298,6 +298,16 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Better logging**: Shows attempt numbers, success after retries, detailed P&L on exit
    - Significantly improves reliability during Solana network congestion
    - **Status**: ✅ Deployed and tested (PENG position properly closed)
+
+10. **Telegram Log File Attachments** (Commit: ce23162 - Oct 27, 2025)
+   - **NEW FEATURE**: Every analysis cycle summary now includes detailed log file
+   - **File format**: `cycle-{number}-{date}.txt` with all logs from that cycle
+   - **Contents**: Timestamped log entries showing full analysis process
+   - **Includes**: Market health calculations, asset analysis, technical indicators, decisions
+   - **Benefits**: Deep visibility without server access, easier debugging, better transparency
+   - **Automatic cleanup**: Temp files deleted after sending
+   - **User request**: "include a text file to the telegram message containing the lines written in the trading-bot.log file for that analysis cycle"
+   - **Status**: ✅ Deployed and tested (cycle-1-2025-10-27.txt successfully sent)
 
 ### 📊 Current Strategy Configuration
 
