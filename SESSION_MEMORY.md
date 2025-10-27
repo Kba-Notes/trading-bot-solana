@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration)
+**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration + Position monitoring + Sell retry logic)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -276,6 +276,28 @@ git status --ignored | grep .env  # Verify .env ignored
    - Updated all documentation (README, CHANGELOG, .env.example)
    - Bot now 100% operational without rate limits
    - **Status**: ✅ Deployed and running successfully
+
+8. **Enhanced Position Monitoring** (Commit: 5176c39 - Oct 27, 2025)
+   - **Real-time P&L tracking**: Shows % and USDC value every 15 minutes
+   - **Trailing stop visibility**: Displays high price, trail stop, and current price
+   - **Distance to targets**: Shows how far from TP/SL when not trailing
+   - **Example logs**: `[Position Monitor] PENG: Entry=$0.022244, Current=$0.021989, P&L=-1.15% ($-5.73)`
+   - **Improved logic**: Trailing stop now monitors even when price drops below activation threshold
+   - Better visibility into position health and exit conditions
+   - **Status**: ✅ Deployed
+
+9. **Robust Sell Order Retry Logic** (Commit: e45e839 - Oct 27, 2025)
+   - **CRITICAL FIX**: Prevents failed trailing stop exits
+   - **Problem solved**: PENG trailing stop triggered at $0.022534 but sell timed out, price fell to $0.021758
+   - **Automatic retries**: Up to 4 total attempts (3 retries + initial)
+   - **5-second delay** between retry attempts
+   - **Transaction verification**: Checks if transaction succeeded even after timeout
+   - **Extended timeout**: 30s → 60s for confirmation
+   - **Smart cleanup**: Detects if tokens already sold from previous attempt
+   - **Critical alerts**: Telegram notification if all 4 attempts fail
+   - **Better logging**: Shows attempt numbers, success after retries, detailed P&L on exit
+   - Significantly improves reliability during Solana network congestion
+   - **Status**: ✅ Deployed and tested (PENG position properly closed)
 
 ### 📊 Current Strategy Configuration
 
