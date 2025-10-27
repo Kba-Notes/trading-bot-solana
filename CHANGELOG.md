@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2025-10-27
+
+### Changed
+- **BREAKING: Migrated from Birdeye to GeckoTerminal API** - Replaced Birdeye for historical OHLCV data to eliminate monthly quota limits
+- **Historical data source: Birdeye → GeckoTerminal** - Free unlimited tier (30 req/min = 43,200 req/day vs 30K CUs/month)
+- **Added GeckoTerminal pool mappings** - All 5 trading assets (JUP, JTO, WIF, PENG, BONK) now use DEX pool addresses
+- **API versioning** - Implemented version header (`Accept: application/json;version=20230302`) for Beta API stability
+
+### Fixed
+- **Telegram notifications** - Corrected "Next analysis in 4 hours" → "Next analysis in 1 hour" to match actual 1-hour interval
+- **Heartbeat cycle counter** - Fixed from 6 cycles to 24 cycles for proper daily heartbeats with 1-hour intervals
+
+### Improved
+- **No more rate limit issues** - Bot uses 0.28% of daily GeckoTerminal limit (120 calls vs 43,200 available)
+- **Eliminated downtime** - Birdeye quota exhaustion was blocking all trades, now fully operational
+- **Future-proof** - GeckoTerminal free tier sufficient for scaling to more assets
+
+### Technical Details
+- Rewrote `getHistoricalData()` in `src/data_extractor/jupiter.ts` to use GeckoTerminal API
+- Updated `src/config.ts` with `geckoPool` field for all assets
+- Modified `src/bot.ts` to pass pool addresses instead of mint addresses
+- GeckoTerminal endpoint: `https://api.geckoterminal.com/api/v2/networks/solana/pools/{pool}/ohlcv/{timeframe}`
+- OHLCV format: `[timestamp, open, high, low, close, volume]` - extracting close prices (index 4)
+
 ## [2.2.0] - 2025-10-09
 
 ### Changed
@@ -88,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
+- **v2.3.0** - API migration (GeckoTerminal replaces Birdeye for unlimited historical data)
 - **v2.2.0** - Timeframe optimization (1-hour candles for faster entries)
 - **v2.1.0** - Strategy optimization (filters, trailing stops, monitoring frequency)
 - **v2.0.0** - Market filter + infrastructure improvements (persistence, metrics, error handling)
@@ -95,7 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Kba-Notes/trading-bot-solana/compare/v1.0.0...v2.0.0

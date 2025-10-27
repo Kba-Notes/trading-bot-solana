@@ -7,7 +7,6 @@ import { ConfigurationError } from '../errors/custom-errors.js';
  */
 const REQUIRED_ENV_VARS = [
     'PRIVATE_KEY',
-    'BIRDEYE_API_KEY',
     'TELEGRAM_TOKEN',
     'TELEGRAM_CHAT_ID'
 ] as const;

@@ -41,7 +41,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 The bot is built with a modular architecture, separating concerns into four main components:
 
-1.  **Data Extractor:** Fetches real-time prices and historical candle data from external APIs (Jupiter, CoinGecko, Birdeye).
+1.  **Data Extractor:** Fetches real-time prices and historical candle data from external APIs (Jupiter, CoinGecko, GeckoTerminal).
 2.  **Strategy Analyzer:** Contains the core trading logic. It calculates technical indicators and the market health index to generate `BUY` or `HOLD` signals.
 3.  **Order Executor:** Manages the portfolio state and executes real trades on the Solana blockchain by building, signing, and sending transactions via the Jupiter API.
 4.  **Notifier & Logger:** Provides real-time feedback via Telegram and maintains a persistent, structured log of all bot activities.
@@ -52,7 +52,10 @@ The bot is built with a modular architecture, separating concerns into four main
 - **Runtime:** Node.js
 - **Primary Blockchain:** Solana
 - **DEX Aggregation:** Jupiter API
-- **Market Data:** CoinGecko API, Birdeye API
+- **Market Data:**
+  - CoinGecko API (Market Health: BTC, ETH, SOL)
+  - GeckoTerminal API (Historical OHLCV for trading assets)
+  - Jupiter API (Real-time prices and swap execution)
 - **Process Management:** PM2
 - **Logging:** Winston
 - **Real-time Notifications:** Telegram Bot API
@@ -70,10 +73,12 @@ TELEGRAM_TOKEN="YourTelegramBotToken"
 
 # Your personal Telegram Chat ID
 TELEGRAM_CHAT_ID="YourTelegramChatID"
-
-# Your free API key from birdeye.so
-BIRDEYE_API_KEY="YourBirdeyeAPIKey"
 ```
+
+**Note:** All market data APIs used by this bot are free and do not require API keys:
+- **CoinGecko:** Free tier for BTC/ETH/SOL market health data
+- **GeckoTerminal:** Free tier (30 req/min) for historical OHLCV candles
+- **Jupiter:** Free tier (1 RPS) for real-time prices and swaps
 
 ### Strategy Parameters
 
@@ -102,11 +107,23 @@ Modify the asset list in `src/config.ts`:
 
 ```typescript
 export const assetsToTrade = [
-    { name: 'JUP', mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN' },
-    { name: 'JTO', mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL' },
-    // Add more SPL tokens here
+    {
+        name: 'JUP',
+        mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+        geckoPool: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg'
+    },
+    {
+        name: 'JTO',
+        mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL',
+        geckoPool: 'G2FiE1yn9N9ZJx5e1E2LxxMnHvb1H3hCuHLPfKJ98smA'
+    },
+    // Add more SPL tokens here with their GeckoTerminal pool addresses
 ];
 ```
+
+**To add new tokens:**
+1. Find the token mint address
+2. Look up the GeckoTerminal pool address at [geckoterminal.com](https://www.geckoterminal.com/solana/pools)
 
 ## Installation and Usage
 
@@ -172,7 +189,13 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.2.0
+**Current Version:** 2.3.0
+
+### Latest Updates (v2.3.0)
+- Migrated from Birdeye to GeckoTerminal API for unlimited historical data
+- Eliminated monthly quota limits (30K CUs/month → 43,200 requests/day)
+- All APIs now free tier with no API keys required
+- Improved reliability and eliminated downtime from rate limits
 
 ## Disclaimer
 
