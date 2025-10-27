@@ -260,11 +260,19 @@ git status --ignored | grep .env  # Verify .env ignored
    - Optimized for volatile meme coin behavior
    - Created CHANGELOG.md and updated README.md
 
-6. **Timeframe Optimization** (Latest commit)
+6. **Timeframe Optimization** (Commit: 3744b6a)
    - Timeframe changed: 4h → 1h for faster signal detection
    - Execution interval: 4 hours → 1 hour (24 checks/day)
    - Better responsiveness for volatile meme coins
    - Catches golden cross signals much faster
+
+7. **GeckoTerminal Integration** (Latest commit - Nov 27, 2025)
+   - **MAJOR**: Replaced Birdeye with GeckoTerminal API
+   - Eliminated Birdeye monthly quota limits (30K CUs/month)
+   - FREE unlimited usage (30 req/min = 43,200 req/day)
+   - All 5 tokens fully supported with pool mappings
+   - API versioning implemented for Beta stability
+   - Bot now 100% operational without rate limits
 
 ### 📊 Current Strategy Configuration
 

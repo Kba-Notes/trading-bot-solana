@@ -7,11 +7,14 @@
 
 // API Rate Limiting
 export const API_DELAYS = {
-    /** Delay between API calls to respect rate limits (ms) */
+    /** Delay between Jupiter API calls (1 RPS = 1000ms, using 1100ms for safety) */
     RATE_LIMIT: 1100,
-    
-    /** Delay between market data API calls to be respectful to free APIs (ms) */
+
+    /** Delay between market data API calls (CoinGecko free tier) */
     MARKET_DATA_API: 2000,
+
+    /** Delay between Birdeye API calls to avoid rate limits (free tier) */
+    BIRDEYE_API: 1500,
 } as const;
 
 // Bot Behavior

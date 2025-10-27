@@ -2,8 +2,8 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { logger } from '../services.js';
-import { retryWithBackoff } from '../utils/async.js';
-import { BOT_CONSTANTS } from '../constants.js';
+import { retryWithBackoff, sleep } from '../utils/async.js';
+import { BOT_CONSTANTS, API_DELAYS } from '../constants.js';
 
 /**
  * Gets the most recent price of a token using Jupiter's price endpoint.
@@ -35,32 +35,39 @@ export async function getCurrentPrice(mintAddress: string): Promise<number | nul
 }
 
 /**
- * Gets a series of historical closing prices using Birdeye.
- * Includes automatic retry logic with exponential backoff.
+ * Gets a series of historical closing prices using GeckoTerminal API.
+ * Uses pool address to fetch OHLCV data for DEX-traded tokens.
  *
- * @param mint The address of the token to analyze.
- * @param timeframe The timeframe of the candles.
- * @param limit The number of closing prices to retrieve.
- * @returns An array of numbers (closing prices) or an empty array if there's an error.
+ * @param geckoPoolAddress The GeckoTerminal pool address
+ * @param timeframe The timeframe of the candles ('minute', 'hour', 'day')
+ * @param limit The number of closing prices to retrieve
+ * @returns An array of numbers (closing prices) or an empty array if there's an error
  */
-export async function getHistoricalData(mint: string, timeframe: '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w', limit: number): Promise<number[]> {
+export async function getHistoricalData(geckoPoolAddress: string, timeframe: '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w', limit: number): Promise<number[]> {
     try {
+        // Map timeframe to GeckoTerminal format
+        const geckoTimeframe = timeframe === '1h' ? 'hour' : timeframe === '1d' ? 'day' : 'minute';
+
         return await retryWithBackoff(async () => {
-            const daysAgo = Math.floor((Date.now() - BOT_CONSTANTS.ASSET_HISTORY_DAYS * 24 * 60 * 60 * 1000) / 1000);
-            const now = Math.floor(Date.now() / 1000);
+            // GeckoTerminal API with versioning (Beta API - setting version header)
+            const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${geckoPoolAddress}/ohlcv/${geckoTimeframe}`;
 
-            const url = `https://public-api.birdeye.so/defi/history_price?address=${mint}&address_type=token&type=${timeframe.toUpperCase()}&time_from=${daysAgo}&time_to=${now}`;
+            const response = await axios.get(url, {
+                headers: {
+                    'Accept': 'application/json;version=20230302' // Set API version
+                }
+            });
 
-            const headers = {'X-API-KEY': process.env.BIRDEYE_API_KEY};
-            const response = await axios.get(url, { headers });
-
-            if (response.data && response.data.data.items) {
-                return response.data.data.items.map((item: any) => item.value).slice(-limit);
+            if (response.data && response.data.data && response.data.data.attributes && response.data.data.attributes.ohlcv_list) {
+                // OHLCV format: [timestamp, open, high, low, close, volume]
+                // We only need close prices (index 4)
+                const ohlcvList = response.data.data.attributes.ohlcv_list;
+                return ohlcvList.map((candle: any[]) => candle[4]).slice(-limit);
             }
-            throw new Error(`No historical data returned for ${mint}`);
+            throw new Error(`No historical data returned for pool ${geckoPoolAddress}`);
         });
     } catch (error: any) {
-        logger.error(`Error fetching historical data from Birdeye for ${mint}:`, error.message);
+        logger.error(`Error fetching historical data from GeckoTerminal for pool ${geckoPoolAddress}:`, error.message);
         return [];
     }
 }

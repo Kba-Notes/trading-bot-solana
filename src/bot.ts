@@ -165,7 +165,7 @@ async function findNewOpportunities(marketHealthIndex: number) {
             continue;
         }
 
-        const historicalPrices = await getJupiterHistoricalData(asset.mint, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
+        const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
         if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
             logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
             await sleep(API_DELAYS.RATE_LIMIT);
