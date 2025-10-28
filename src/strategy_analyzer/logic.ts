@@ -43,9 +43,14 @@ export function calculateIndicators(closingPrices: number[]): Indicators | null 
  * Main function that analyzes an asset and returns a trading decision and calculated indicators.
  * @param closingPrices The closing prices of the asset to analyze.
  * @param marketHealthIndex The result of the market filter.
+ * @param requireRsiConfirmation Whether to require RSI > 50 for entries (default: false for meme coins)
  * @returns An object with the final decision and the indicators used.
  */
-export function runStrategy(closingPrices: number[], marketHealthIndex: number): { decision: Action; indicators: Indicators | null } {
+export function runStrategy(
+    closingPrices: number[],
+    marketHealthIndex: number,
+    requireRsiConfirmation: boolean = false
+): { decision: Action; indicators: Indicators | null } {
 
     if (marketHealthIndex <= 0) {
         return {
@@ -71,18 +76,34 @@ export function runStrategy(closingPrices: number[], marketHealthIndex: number):
     const isGoldenCross = prevSma12 <= prevSma26 && sma12 > sma26;
     const isRsiOk = rsi14 > 50;
 
-    if (isGoldenCross && isRsiOk) {
-        return {
-            decision: { action: 'BUY', reason: 'Golden Cross (SMA 12/26) and RSI > 50' },
-            indicators: indicators
-        };
+    // Entry logic: Golden Cross is primary signal
+    // RSI confirmation is optional (better for meme coins which often rally from oversold)
+    if (requireRsiConfirmation) {
+        // Conservative mode: Require both Golden Cross AND RSI > 50
+        if (isGoldenCross && isRsiOk) {
+            return {
+                decision: { action: 'BUY', reason: 'Golden Cross (SMA 12/26) and RSI > 50' },
+                indicators: indicators
+            };
+        }
+    } else {
+        // Aggressive mode (default for meme coins): Golden Cross alone is enough
+        if (isGoldenCross) {
+            return {
+                decision: { action: 'BUY', reason: `Golden Cross (SMA 12/26) detected${isRsiOk ? ' with RSI > 50' : ` (RSI: ${rsi14.toFixed(2)})`}` },
+                indicators: indicators
+            };
+        }
     }
 
     // Logic to explain HOLD decision
     let holdReason = 'Buy conditions not met.';
-    if (sma12 > sma26) {
+    if (isGoldenCross && !isRsiOk && requireRsiConfirmation) {
+        // Golden Cross detected but RSI filter blocked entry
+        holdReason = `Golden Cross detected but RSI below 50 (${rsi14.toFixed(2)}), waiting for momentum confirmation.`;
+    } else if (sma12 > sma26) {
         holdReason = 'Trend already bullish, waiting for new crossover.';
-    } else if (!isRsiOk) {
+    } else if (!isRsiOk && requireRsiConfirmation) {
         holdReason = `RSI below 50 (${rsi14.toFixed(2)}), insufficient strength.`;
     } else {
         holdReason = 'SMA 12 below SMA 26, waiting for crossover.';

@@ -52,6 +52,10 @@ export const strategyConfig = {
     longSMAPeriod: 26,
     rsiPeriod: 14,
     rsiThreshold: 50,
+    // RSI filter control - set to false for meme coins (momentum-driven assets)
+    // Meme coins often start rallies from oversold conditions (RSI < 50)
+    // Enabling this filter can cause missed Golden Cross entries (e.g., BONK at RSI 34.88)
+    requireRsiConfirmation: false,  // Set to true for more conservative entries
 };
 
 export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;        // 1 hour - main analysis cycle (24 checks/day)

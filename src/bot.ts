@@ -194,7 +194,7 @@ async function findNewOpportunities(marketHealthIndex: number) {
             continue;
         }
 
-        const { decision, indicators } = runStrategy(historicalPrices, marketHealthIndex);
+        const { decision, indicators } = runStrategy(historicalPrices, marketHealthIndex, strategyConfig.requireRsiConfirmation);
 
         // Detailed logging
         if (indicators) {
