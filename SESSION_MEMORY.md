@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-27 (Latest session - GeckoTerminal migration + Position monitoring + Sell retry logic + Log attachments)
+**Last Updated**: 2025-10-28 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -309,12 +309,25 @@ git status --ignored | grep .env  # Verify .env ignored
    - **User request**: "include a text file to the telegram message containing the lines written in the trading-bot.log file for that analysis cycle"
    - **Status**: ✅ Deployed and tested (cycle-1-2025-10-27.txt successfully sent)
 
+11. **Optional RSI Filter Fix** (Commit: b205e11 - Oct 28, 2025)
+   - **CRITICAL BUG FIX**: Bot was missing Golden Cross entries due to strict RSI > 50 requirement
+   - **Problem**: BONK Golden Cross at 20:23 (SMA12 > SMA26) rejected because RSI = 34.88 < 50
+   - **Result**: Missed perfect entry as SMA12 just crossed SMA26
+   - **Solution**: Made RSI filter optional via `requireRsiConfirmation: false` (default)
+   - **Aggressive mode** (default): Golden Cross alone triggers BUY (better for meme coins)
+   - **Conservative mode**: Set `requireRsiConfirmation: true` to require RSI > 50
+   - **Reasoning**: Meme coins often start rallies from oversold (RSI 30-40), Golden Cross is primary signal
+   - **Flexibility**: Can enable RSI filter per-asset or for testing in future
+   - **RSI still logged**: "Golden Cross detected (RSI: 34.88)" for visibility
+   - **User question**: "Shouldn't we have bought BONK?" - YES! Now we will.
+   - **Status**: ✅ Deployed (will catch next Golden Cross regardless of RSI)
+
 ### 📊 Current Strategy Configuration
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0
-- Golden Cross: SMA(12) > SMA(26)
-- RSI(14) > 50
+- Golden Cross: SMA(12) > SMA(26) ✅ **PRIMARY SIGNAL**
+- ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins)
 - **Filter**: SMA slope > 0.1% (trend strength)
 - **Filter**: Volatility < 5% (market stability)
 
