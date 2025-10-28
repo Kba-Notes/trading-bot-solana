@@ -207,7 +207,10 @@ async function findNewOpportunities(marketHealthIndex: number) {
             buySignals++;
             const currentPrice = await getCurrentPrice(asset.mint);
             if (currentPrice) {
-                await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
+                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
+                if (!buySuccess) {
+                    logger.error(`Failed to execute buy order for ${asset.name} after all retries.`);
+                }
             } else {
                 logger.error(`Could not get price to execute buy for ${asset.name}`);
             }

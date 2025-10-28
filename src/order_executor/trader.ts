@@ -184,20 +184,36 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
 }
 
 /**
- * Executes a REAL buy order.
+ * Executes a REAL buy order with retry logic.
  *
  * @param assetMint The Solana mint address of the asset to buy
  * @param amountUSDC Amount in USDC to trade
  * @param price Current price for position tracking
+ * @param retryCount Current retry attempt (used internally)
  * @throws Error if validation fails or position limit exceeded
  */
-export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number): Promise<void> {
+export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number, retryCount: number = 0): Promise<boolean> {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+
     // Validate inputs
     validateSolanaAddress(assetMint, 'assetMint');
     validateSolanaAddress(USDC_MINT, 'USDC_MINT');
     validateTradeAmount(amountUSDC, 'amountUSDC');
     validatePrice(price, 'price');
     validatePositionLimit(openPositions.length);
+
+    const assetConfig = assetsToTrade.find(a => a.mint === assetMint);
+    const assetName = assetConfig?.name || assetMint;
+
+    // Check if position already exists for this asset
+    const existingPosition = openPositions.find(p => p.asset === assetMint);
+    if (existingPosition && retryCount === 0) {
+        logger.warn(`Position already exists for ${assetName}, skipping buy order.`);
+        return true; // Consider this a success - position already open
+    }
+
+    logger.info(`🔄 Buy attempt ${retryCount + 1}/${MAX_RETRIES + 1} for ${assetName} (${amountUSDC} USDC)`);
 
     const amountInSmallestUnit = Math.floor(amountUSDC * Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS));
     const swapStartTime = Date.now();
@@ -209,6 +225,8 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
     PerformanceMetrics.recordTrade('BUY', success);
 
     if (success) {
+        logger.info(`✅ Buy successful for ${assetName} after ${retryCount + 1} attempt(s)`);
+
         const position: OpenPosition = {
             id: nextPositionId++,
             asset: assetMint,
@@ -221,13 +239,29 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
         // Persist positions to disk
         await savePositions(openPositions);
 
-        const assetConfig = assetsToTrade.find(a => a.mint === assetMint);
         sendTradeNotification({
-            asset: assetConfig?.name || assetMint,
+            asset: assetName,
             action: 'BUY',
             price: price,
-            reason: 'Strategy signal confirmed.'
+            amount: amountUSDC,
+            reason: 'Strategy signal confirmed.',
+            indicators: {
+                // Indicators will be added by the calling function if available
+            }
         });
+
+        return true;
+    } else {
+        // Swap failed - retry if attempts remaining
+        if (retryCount < MAX_RETRIES) {
+            logger.warn(`❌ Buy attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            return await executeBuyOrder(assetMint, amountUSDC, price, retryCount + 1);
+        } else {
+            logger.error(`❌ All ${MAX_RETRIES + 1} buy attempts failed for ${assetName}.`);
+            sendMessage(`⚠️ *CRITICAL: Failed to buy ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts failed. No position opened.\n\nAsset: ${assetName}\nIntended Entry: $${price.toFixed(6)}\nAmount: ${amountUSDC} USDC`);
+            return false;
+        }
     }
 }
 
