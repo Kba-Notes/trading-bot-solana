@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-28 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI)
+**Last Updated**: 2025-10-28 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -321,6 +321,20 @@ git status --ignored | grep .env  # Verify .env ignored
    - **RSI still logged**: "Golden Cross detected (RSI: 34.88)" for visibility
    - **User question**: "Shouldn't we have bought BONK?" - YES! Now we will.
    - **Status**: ✅ Deployed (will catch next Golden Cross regardless of RSI)
+
+12. **Buy Order Retry Logic** (Commit: 22f5f69 - Oct 28, 2025)
+   - **NEW FEATURE**: Buy orders now have same retry reliability as sell orders
+   - **Live test performed**: Successfully bought 1 USDC of BONK (TX: 63MJ2irptBxwrt2cc8BG9HTTgPFhgsqwajRZ6zSgKL3dXndpZmtwNhRagy8ZfS6pu96pPcUfNYPezswCLe1Npi9D)
+   - **Automatic retries**: Up to 4 total attempts (3 retries + initial)
+   - **5-second delay** between retry attempts
+   - **Function signature changed**: `executeBuyOrder()` now returns boolean (success/failure)
+   - **Smart duplicate prevention**: Checks if position already exists before retrying
+   - **Critical alerts**: Telegram notification if all 4 attempts fail
+   - **Better logging**: Shows attempt numbers "🔄 Buy attempt 1/4 for BONK (500 USDC)"
+   - **Error handling**: Bot properly logs failures and continues to next asset
+   - **Test script**: Created `/root/trading-bot/src/tests/test_buy_bonk.ts` for future testing
+   - **Motivation**: Previous BONK buy at 22:54:41 failed with Jupiter RPC error (500)
+   - **Status**: ✅ Deployed and tested with real transaction
 
 ### 📊 Current Strategy Configuration
 
