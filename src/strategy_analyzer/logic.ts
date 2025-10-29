@@ -70,10 +70,23 @@ export function runStrategy(
 
     const { sma12, sma26, rsi14 } = indicators;
 
-    const prevSma12 = SMA.calculate({ period: 12, values: closingPrices.slice(0, -1) }).pop()!;
-    const prevSma26 = SMA.calculate({ period: 26, values: closingPrices.slice(0, -1) }).pop()!;
+    // Improved Golden Cross detection: Check last 3 candles to catch crossovers we might have missed
+    // This is important because we only check once per hour, but crossovers can happen any time
+    let isGoldenCross = false;
+    const lookbackCandles = 3; // Check last 3 candles for crossover
 
-    const isGoldenCross = prevSma12 <= prevSma26 && sma12 > sma26;
+    for (let i = 1; i <= lookbackCandles && i < closingPrices.length; i++) {
+        const prevSma12 = SMA.calculate({ period: 12, values: closingPrices.slice(0, -i) }).pop()!;
+        const prevSma26 = SMA.calculate({ period: 26, values: closingPrices.slice(0, -i) }).pop()!;
+
+        // Check if crossover happened between this candle and current
+        if (prevSma12 <= prevSma26 && sma12 > sma26) {
+            isGoldenCross = true;
+            console.log(`[Golden Cross] Detected crossover ${i} candle(s) ago: prevSMA12=${prevSma12.toFixed(8)} <= prevSMA26=${prevSma26.toFixed(8)}, now SMA12=${sma12.toFixed(8)} > SMA26=${sma26.toFixed(8)}`);
+            break;
+        }
+    }
+
     const isRsiOk = rsi14 > 50;
 
     // Entry logic: Golden Cross is primary signal
