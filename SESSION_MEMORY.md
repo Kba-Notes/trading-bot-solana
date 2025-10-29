@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-28 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry)
+**Last Updated**: 2025-10-29 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -335,6 +335,19 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Test script**: Created `/root/trading-bot/src/tests/test_buy_bonk.ts` for future testing
    - **Motivation**: Previous BONK buy at 22:54:41 failed with Jupiter RPC error (500)
    - **Status**: ✅ Deployed and tested with real transaction
+
+13. **Improved Golden Cross Detection with Lookback** (Commit: 9884208 - Oct 29, 2025)
+   - **CRITICAL BUG FIX**: Bot was missing Golden Cross signals between hourly checks
+   - **Problem**: PENG crossed between 11:29-12:29 but was marked as "already bullish"
+   - **Root cause**: Only checking last candle vs previous missed crossovers from 1-2 candles ago
+   - **Solution**: Check last 3 candles for Golden Cross detection instead of just 1
+   - **Implementation**: Loop through i=1 to 3, check if prevSMA12 <= prevSMA26 at any point
+   - **Debug logging**: Shows which candle had the crossover (e.g., "crossover 2 candle(s) ago")
+   - **Live test**: PENG Golden Cross detected 2 candles ago, bought at $0.020617 with RSI 42.48
+   - **Transaction**: 4UA6AhrWccq8K17D1yKfYhse9dtf9QUcod93mM4CQKV4RMkEBnWpPp1H5eQ9JFxdNE5uVnNvuU9NGDt7pJYxASv
+   - **Impact**: No more missed entries between hourly cycles, catches up to 3 hours of crossovers
+   - **Critical for**: Meme coin strategy with 1-hour timeframe and hourly analysis cycles
+   - **Status**: ✅ Deployed and verified with real PENG position opened
 
 ### 📊 Current Strategy Configuration
 
