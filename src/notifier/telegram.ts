@@ -8,9 +8,12 @@ let currentCycleStartTime: Date | null = null;
 
 /**
  * Marks the start of a new analysis cycle for log tracking
+ * Subtracts 1 second to ensure we capture all logs (since log timestamps have second precision)
  */
 export function markCycleStart() {
-    currentCycleStartTime = new Date();
+    const now = new Date();
+    // Subtract 1 second to ensure we capture logs from the same second
+    currentCycleStartTime = new Date(now.getTime() - 1000);
 }
 
 /**
