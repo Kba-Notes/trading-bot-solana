@@ -45,7 +45,7 @@ export const strategyConfig = {
     timeframe: '1h' as const,      // Changed from 4h to 1h for faster meme coin signals
     historicalDataLimit: 100,
     tradeAmountUSDC: 500,
-    takeProfitPercentage: 0.08,    // 8% take profit for meme coin upside capture
+    takeProfitPercentage: 0.08,    // DEPRECATED: No longer used (trailing stop activates before TP can be reached)
     stopLossPercentage: 0.03,      // 3% stop loss to reduce false stops
     // Strategy-specific parameters
     shortSMAPeriod: 12,
@@ -59,4 +59,4 @@ export const strategyConfig = {
 };
 
 export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;        // 1 hour - main analysis cycle (24 checks/day)
-export const POSITION_CHECK_INTERVAL = 15 * 60 * 1000;            // 15 minutes - position monitoring
+export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;            // 1 minute - position monitoring (increased from 15 min for better trailing stop capture)

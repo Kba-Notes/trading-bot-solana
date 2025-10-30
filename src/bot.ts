@@ -108,17 +108,16 @@ async function checkOpenPositions() {
         // Log position status with P&L
         logger.info(`[Position Monitor] ${assetConfig.name}: Entry=$${position.entryPrice.toFixed(6)}, Current=$${currentPrice.toFixed(6)}, P&L=${pnlSign}${pnlPercent.toFixed(2)}% (${pnlSign}$${pnlUSDC.toFixed(2)})`);
 
-        const takeProfitPrice = position.entryPrice * (1 + strategyConfig.takeProfitPercentage);
         const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
 
-        // Trailing stop logic: Activate when in 2% profit
-        const profitThreshold = position.entryPrice * 1.02;
+        // Trailing stop logic: Activate when in 1% profit (optimized for 1-min monitoring)
+        const profitThreshold = position.entryPrice * 1.01;
 
         // Check if we should activate trailing stop
         if (currentPrice >= profitThreshold && !position.trailingStopActive) {
             position.trailingStopActive = true;
             position.highestPrice = currentPrice;
-            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(6)}`);
+            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(6)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
         }
 
         // If trailing stop is active, monitor it regardless of current price level
@@ -126,7 +125,7 @@ async function checkOpenPositions() {
             // Update highest price if current is higher
             position.highestPrice = Math.max(position.highestPrice || currentPrice, currentPrice);
 
-            // Trail 3% below highest price (increased from 2% to reduce premature exits)
+            // Trail 3% below highest price (balanced for meme coin volatility with 1-min checks)
             const trailingStopPrice = position.highestPrice * 0.97;
 
             // Log trailing stop status
@@ -140,23 +139,20 @@ async function checkOpenPositions() {
             }
         }
 
+        // Check Stop Loss (only exit condition besides trailing stop)
         let shouldSell = false;
         let sellReason = '';
 
-        if (currentPrice >= takeProfitPrice) {
-            logger.info(`🎯 TAKE PROFIT reached for ${assetConfig.name}! Target: $${takeProfitPrice.toFixed(6)}, Current: $${currentPrice.toFixed(6)}`);
-            shouldSell = true;
-            sellReason = 'Take Profit';
-        } else if (currentPrice <= stopLossPrice) {
+        if (currentPrice <= stopLossPrice) {
             logger.info(`⛔ STOP LOSS reached for ${assetConfig.name}! Stop: $${stopLossPrice.toFixed(6)}, Current: $${currentPrice.toFixed(6)}`);
             shouldSell = true;
             sellReason = 'Stop Loss';
         } else {
-            // Log distance to targets if not trailing
+            // Log distance to activation/stop loss if not trailing yet
             if (!position.trailingStopActive) {
-                const distanceToTP = ((takeProfitPrice - currentPrice) / currentPrice) * 100;
+                const distanceToActivation = ((profitThreshold - currentPrice) / currentPrice) * 100;
                 const distanceToSL = ((currentPrice - stopLossPrice) / currentPrice) * 100;
-                logger.info(`[Targets] ${assetConfig.name}: TP=${distanceToTP.toFixed(2)}% away, SL=${distanceToSL.toFixed(2)}% away`);
+                logger.info(`[Targets] ${assetConfig.name}: Trailing activation=${distanceToActivation.toFixed(2)}% away, SL=${distanceToSL.toFixed(2)}% away`);
             }
         }
 
