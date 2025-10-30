@@ -6,6 +6,9 @@ import path from 'path';
 // Store the start time of current analysis cycle for log extraction
 let currentCycleStartTime: Date | null = null;
 
+// Store the start time of current operation (BUY/SELL) for log extraction
+let currentOperationStartTime: Date | null = null;
+
 /**
  * Marks the start of a new analysis cycle for log tracking
  * Subtracts 1 second to ensure we capture all logs (since log timestamps have second precision)
@@ -14,6 +17,16 @@ export function markCycleStart() {
     const now = new Date();
     // Subtract 1 second to ensure we capture logs from the same second
     currentCycleStartTime = new Date(now.getTime() - 1000);
+}
+
+/**
+ * Marks the start of a trading operation (BUY/SELL) for log tracking
+ * Used to extract logs for position monitor SELL operations
+ */
+export function markOperationStart() {
+    const now = new Date();
+    // Subtract 1 second to ensure we capture logs from the same second
+    currentOperationStartTime = new Date(now.getTime() - 1000);
 }
 
 /**
@@ -77,6 +90,68 @@ async function extractCycleLogs(): Promise<string | null> {
 }
 
 /**
+ * Extracts logs from the current trading operation and saves to a temp file
+ * Used for SELL operations during position monitoring
+ * @param operationType Type of operation (e.g., 'sell', 'buy')
+ * @param assetName Name of the asset being traded
+ * @returns Path to the temp file containing operation logs, or null if failed
+ */
+async function extractOperationLogs(operationType: string, assetName: string): Promise<string | null> {
+    if (!currentOperationStartTime) {
+        logger.warn('Cannot extract operation logs: operation start time not set');
+        return null;
+    }
+
+    try {
+        const logFilePath = path.join(process.cwd(), 'trading-bot.log');
+        const tempLogPath = path.join(process.cwd(), `temp-${operationType}-${assetName}-log.txt`);
+
+        // Read the log file
+        const logContent = await fs.promises.readFile(logFilePath, 'utf-8');
+        const logLines = logContent.split('\n');
+
+        // Filter logs from current operation
+        const operationLogs: string[] = [];
+
+        for (const line of logLines) {
+            if (!line.trim()) continue;
+
+            try {
+                const logEntry = JSON.parse(line);
+                const logTime = new Date(logEntry.timestamp);
+
+                // Include logs from current operation onwards
+                if (logTime >= currentOperationStartTime) {
+                    // Format for readability
+                    const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
+                    operationLogs.push(formattedLine);
+                }
+            } catch (parseError) {
+                // Skip malformed lines
+                continue;
+            }
+        }
+
+        if (operationLogs.length === 0) {
+            logger.warn('No logs found for current operation');
+            return null;
+        }
+
+        // Add header
+        const header = `=== ${operationType.toUpperCase()} Operation Logs - ${assetName} ===\nOperation Start: ${currentOperationStartTime.toLocaleString()}\nTotal Log Entries: ${operationLogs.length}\n\n`;
+        const fileContent = header + operationLogs.join('\n');
+
+        // Write to temp file
+        await fs.promises.writeFile(tempLogPath, fileContent, 'utf-8');
+
+        return tempLogPath;
+    } catch (error) {
+        logger.error('Failed to extract operation logs:', error);
+        return null;
+    }
+}
+
+/**
  * Sends a text message via Telegram bot.
  */
 export function sendMessage(message: string) {
@@ -120,8 +195,9 @@ interface AnalysisUpdate {
 
 /**
  * Formats and sends a trading operation notification.
+ * For SELL operations, also sends a log file with operation details.
  */
-export function sendTradeNotification(details: TradeDetails) {
+export async function sendTradeNotification(details: TradeDetails) {
     const icon = details.action === 'BUY' ? '🟢 BUY' : '🔴 SELL';
     let message = `*${icon} - ${details.asset}*\n`;
 
@@ -179,7 +255,28 @@ export function sendTradeNotification(details: TradeDetails) {
         }
     }
 
+    // Send message first
     sendMessage(message);
+
+    // For SELL operations, also send log file with operation details
+    if (details.action === 'SELL') {
+        const logFilePath = await extractOperationLogs('sell', details.asset);
+        if (logFilePath && bot && chatId) {
+            const timestamp = new Date().toISOString().split('T')[0];
+            const fileName = `sell-${details.asset}-${timestamp}.txt`;
+
+            try {
+                await bot.sendDocument(chatId, logFilePath, {
+                    caption: `📄 Detailed logs for SELL operation - ${details.asset}`
+                }, { filename: fileName, contentType: 'text/plain' });
+
+                // Cleanup temp file
+                await fs.promises.unlink(logFilePath);
+            } catch (error) {
+                logger.error('Failed to send operation log file:', error);
+            }
+        }
+    }
 }
 
 /**

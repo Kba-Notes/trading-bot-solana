@@ -1,7 +1,7 @@
 // src/order_executor/trader.ts
 
 import { logger } from '../services.js';
-import { sendTradeNotification, sendMessage } from '../notifier/telegram.js';
+import { sendTradeNotification, sendMessage, markOperationStart } from '../notifier/telegram.js';
 import { Connection, Keypair, VersionedTransaction, PublicKey, Transaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import axios from 'axios';
@@ -284,6 +284,11 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 5000; // 5 seconds between retries
 
+    // Mark operation start for log extraction (only on first attempt)
+    if (retryCount === 0) {
+        markOperationStart();
+    }
+
     // Validate position data
     validateSolanaAddress(position.asset, 'position.asset');
     validatePrice(position.entryPrice, 'position.entryPrice');
@@ -328,11 +333,13 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
             const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
 
-            sendTradeNotification({
+            await sendTradeNotification({
                 asset: assetName,
                 action: 'SELL',
                 price: currentPrice,
-                pnl: pnl
+                entryPrice: position.entryPrice,
+                pnl: pnl,
+                percentage: pnlPercent
             });
 
             logger.info(`💰 ${assetName} sold: Entry=$${position.entryPrice.toFixed(6)}, Exit=$${currentPrice.toFixed(6)}, P&L=${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}% (${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)})`);
