@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-29 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback)
+**Last Updated**: 2025-10-30 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback + Telegram log timestamp fix)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -342,12 +342,27 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Root cause**: Only checking last candle vs previous missed crossovers from 1-2 candles ago
    - **Solution**: Check last 3 candles for Golden Cross detection instead of just 1
    - **Implementation**: Loop through i=1 to 3, check if prevSMA12 <= prevSMA26 at any point
-   - **Debug logging**: Shows which candle had the crossover (e.g., "crossover 2 candle(s) ago")
+   - **Debug logging**: Shows which candle had the crossover (e.g., "crossover 2 candles ago")
    - **Live test**: PENG Golden Cross detected 2 candles ago, bought at $0.020617 with RSI 42.48
    - **Transaction**: 4UA6AhrWccq8K17D1yKfYhse9dtf9QUcod93mM4CQKV4RMkEBnWpPp1H5eQ9JFxdNE5uVnNvuU9NGDt7pJYxASv
    - **Impact**: No more missed entries between hourly cycles, catches up to 3 hours of crossovers
    - **Critical for**: Meme coin strategy with 1-hour timeframe and hourly analysis cycles
    - **Status**: ✅ Deployed and verified with real PENG position opened
+
+14. **Fixed Telegram Log Attachment Timestamp Issue** (Commits: 7ae5c1e, d563ca2 - Oct 30, 2025)
+   - **BUG FIX**: BTC/ETH/SOL market health logs missing from Telegram text file attachments
+   - **User report**: "BTC line is in trading-bot.log but not in txt file"
+   - **First attempt** (7ae5c1e): Moved markCycleStart() before first log - didn't fully fix
+   - **Root cause discovered**: Timestamp precision mismatch
+     - markCycleStart() sets time with milliseconds: 09:13:00.123Z
+     - Log timestamps rounded to seconds: "09:13:00" (parsed as 09:13:00.000)
+     - Comparison: 09:13:00.000 >= 09:13:00.123 = FALSE ❌
+   - **Solution** (d563ca2): Subtract 1 second from currentCycleStartTime
+     - Now: 09:12:59.123 vs 09:13:00.000 comparison = TRUE ✅
+   - **Result**: All logs from cycle start second now captured
+   - **Files affected**: telegram.ts - markCycleStart() function
+   - **Verification**: User confirmed fix worked in next cycle
+   - **Status**: ✅ Deployed and verified - complete log files in Telegram
 
 ### 📊 Current Strategy Configuration
 
