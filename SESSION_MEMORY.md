@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-30 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback + Telegram log timestamp fix)
+**Last Updated**: 2025-10-30 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback + Telegram log fixes + SELL log attachments)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -363,6 +363,27 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Files affected**: telegram.ts - markCycleStart() function
    - **Verification**: User confirmed fix worked in next cycle
    - **Status**: ✅ Deployed and verified - complete log files in Telegram
+
+15. **SELL Operation Log Attachments** (Commits: 850d020, 8ebf242 - Oct 30, 2025)
+   - **NEW FEATURE**: Detailed log files for SELL operations during position monitoring
+   - **User request**: "cuando ocurre una orden SELL deberia incluir tambien un txt file"
+   - **Problem**: SELL during 15-min monitoring only sent brief notification, no logs
+   - **Example**: JUP sold at 04:25 (Stop Loss) had no details
+   - **Implementation** (850d020):
+     - Added markOperationStart() called at beginning of executeSellOrder()
+     - Created extractOperationLogs() to capture SELL operation logs
+     - Modified sendTradeNotification() to be async
+     - Sends txt file with: position check, P&L, reason, transaction details
+     - Filename: sell-{ASSET}-{DATE}.txt
+   - **Optimization** (8ebf242): Prevent duplicate txt files
+     - User feedback: "si la orden SELL se produce durante un ciclo horario no hace falta enviar el txt file"
+     - Added isInAnalysisCycle flag to track if in hourly analysis
+     - Only sends SELL txt if NOT in analysis cycle
+     - If in cycle: logs already included in cycle txt file
+   - **Logic**:
+     - SELL during 15-min monitoring → Sends separate SELL txt ✅
+     - SELL during hourly analysis → Skips SELL txt (in cycle txt) ✅
+   - **Status**: ✅ Deployed - no duplicate files, complete SELL visibility
 
 ### 📊 Current Strategy Configuration
 
