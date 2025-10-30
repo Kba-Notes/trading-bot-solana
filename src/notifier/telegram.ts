@@ -9,6 +9,9 @@ let currentCycleStartTime: Date | null = null;
 // Store the start time of current operation (BUY/SELL) for log extraction
 let currentOperationStartTime: Date | null = null;
 
+// Flag to track if we're currently in an hourly analysis cycle
+let isInAnalysisCycle: boolean = false;
+
 /**
  * Marks the start of a new analysis cycle for log tracking
  * Subtracts 1 second to ensure we capture all logs (since log timestamps have second precision)
@@ -17,6 +20,15 @@ export function markCycleStart() {
     const now = new Date();
     // Subtract 1 second to ensure we capture logs from the same second
     currentCycleStartTime = new Date(now.getTime() - 1000);
+    isInAnalysisCycle = true;
+}
+
+/**
+ * Marks the end of an analysis cycle
+ * Called after sending the cycle summary
+ */
+export function markCycleEnd() {
+    isInAnalysisCycle = false;
 }
 
 /**
@@ -258,8 +270,9 @@ export async function sendTradeNotification(details: TradeDetails) {
     // Send message first
     sendMessage(message);
 
-    // For SELL operations, also send log file with operation details
-    if (details.action === 'SELL') {
+    // For SELL operations, send log file ONLY if NOT in analysis cycle
+    // (during analysis cycle, logs are already included in cycle txt file)
+    if (details.action === 'SELL' && !isInAnalysisCycle) {
         const logFilePath = await extractOperationLogs('sell', details.asset);
         if (logFilePath && bot && chatId) {
             const timestamp = new Date().toISOString().split('T')[0];
@@ -272,10 +285,13 @@ export async function sendTradeNotification(details: TradeDetails) {
 
                 // Cleanup temp file
                 await fs.promises.unlink(logFilePath);
+                logger.info(`Sent SELL operation log file for ${details.asset}`);
             } catch (error) {
                 logger.error('Failed to send operation log file:', error);
             }
         }
+    } else if (details.action === 'SELL' && isInAnalysisCycle) {
+        logger.info(`Skipping SELL log file for ${details.asset} (already in analysis cycle txt)`);
     }
 }
 
@@ -325,6 +341,9 @@ _Next analysis in 1 hour..._
         logger.error('Failed to send cycle log file:', error);
         // Don't fail the whole function if log sending fails
     }
+
+    // Mark end of analysis cycle (so SELL operations outside cycle get their own txt)
+    markCycleEnd();
 }
 
 /**
