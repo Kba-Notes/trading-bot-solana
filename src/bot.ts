@@ -267,10 +267,10 @@ async function main() {
             const cycleStartTime = Date.now();
 
             try {
-                logger.info('--- New analysis cycle started ---');
-
-                // Mark the start of this cycle for log tracking
+                // Mark the start of this cycle for log tracking BEFORE any logs
                 markCycleStart();
+
+                logger.info('--- New analysis cycle started ---');
 
                 const marketHealthIndex = await calculateMarketHealth();
 
