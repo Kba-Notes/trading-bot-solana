@@ -25,9 +25,12 @@ const strategy = new GoldenCrossStrategy({
 });
 
 // Fetches historical price data from CoinGecko
+// CoinGecko auto-granularity: 1-90 days = hourly data, >90 days = daily data
 async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
     try {
-        const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${BOT_CONSTANTS.MARKET_HEALTH_HISTORY_DAYS}&interval=daily`;
+        // Request last 2 days of data = automatic hourly granularity (48 hourly candles)
+        // This gives us enough data for SMA(20) on hourly timeframe
+        const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=2`;
         const response = await axios.get(url);
         if (response.data && response.data.prices) {
             return response.data.prices.map((priceEntry: [number, number]) => priceEntry[1]);

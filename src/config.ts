@@ -10,7 +10,7 @@ export const marketFilterConfig = {
         { name: 'SOL', id: 'solana', weight: 0.50 }
     ],
     indicatorPeriod: 20,
-    timeframe: '1d' as const,
+    timeframe: '1h' as const,  // Changed from '1d' to '1h' to match trading strategy timeframe
 };
 
 export const assetsToTrade = [

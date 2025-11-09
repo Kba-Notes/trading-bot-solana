@@ -24,10 +24,10 @@ export const BOT_CONSTANTS = {
     
     /** Minimum number of historical data points required for strategy analysis */
     MIN_HISTORICAL_DATA_POINTS: 50,
-    
-    /** Number of days of historical data to fetch for market health */
+
+    /** Number of days of historical data to fetch for market health (DEPRECATED: now using 2 days for hourly data) */
     MARKET_HEALTH_HISTORY_DAYS: 30,
-    
+
     /** Number of days of historical data to fetch for asset analysis */
     ASSET_HISTORY_DAYS: 10,
 } as const;

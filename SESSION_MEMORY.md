@@ -385,7 +385,7 @@ git status --ignored | grep .env  # Verify .env ignored
      - SELL during hourly analysis → Skips SELL txt (in cycle txt) ✅
    - **Status**: ✅ Deployed - no duplicate files, complete SELL visibility
 
-16. **1-Minute Monitoring + Optimized Trailing Stop** (Commit: TBD - Oct 30, 2025)
+16. **1-Minute Monitoring + Optimized Trailing Stop** (Commit: fc165e2 - Nov 9, 2025)
    - **MAJOR OPTIMIZATION**: Reduced monitoring from 15 minutes to 1 minute
    - **Strategy Discussion**: User questioned if TP (+8%) makes sense with trailing stop (+2% activation)
      - **User insight**: "To reach TP (+8%) you must first activate trailing (+2%), so TP is always unreachable"
@@ -410,10 +410,42 @@ git status --ignored | grep .env  # Verify .env ignored
      - NEW (1-min): Peak at $110 captured, sold at $106.70 (+$3.70/token saved)
    - **Status**: ✅ Deployed - major upgrade for volatile meme coin trading
 
+17. **Hourly Market Health Index** (Commit: TBD - Nov 9, 2025)
+   - **CRITICAL FIX**: Market Health calculation was using wrong timeframe
+   - **Problem Identified**: User noticed SMA(20) values didn't match Binance charts
+     - Bot calculated: BTC SMA20=108010.31, ETH SMA20=3745.73, SOL SMA20=179.77
+     - Binance showed: MA(20) very close to current prices on 15m/1h charts
+     - **Root cause**: Bot used 20-day SMA vs Binance 20-period MA on short timeframe
+   - **Old System (20-day SMA)**:
+     - Fetched 30 days of daily price data from CoinGecko
+     - Calculated SMA(20) on daily candles = 20-day moving average
+     - Very laggy - reflected market conditions from weeks ago
+     - Example: Market Health Index = -8.25% → **BUYING DISABLED** ❌
+   - **New System (20-hour SMA)**:
+     - Fetches 2 days of data from CoinGecko (auto-returns hourly granularity)
+     - Calculates SMA(20) on hourly candles = 20-hour moving average
+     - Responsive - reflects market conditions from last 20 hours
+     - Example: Market Health Index = +0.93% → **BUYING ENABLED** ✅
+   - **Comparison (same market conditions)**:
+     ```
+     OLD (20-day):  BTC -5.33%, ETH -8.49%, SOL -11.49% = -8.25% (blocked)
+     NEW (20-hour): BTC +0.40%, ETH +1.52%, SOL +0.xx% = +0.93% (allowed)
+     ```
+   - **Benefits**:
+     - **Matches trading timeframe**: 1h market health for 1h Golden Cross strategy
+     - **More responsive**: Reacts within hours, not weeks
+     - **Accurate filtering**: Now consistent with Binance/real market conditions
+     - **Increased opportunities**: Won't block buying during short-term recoveries
+   - **Technical Details**:
+     - CoinGecko free tier: 1-90 days query = automatic hourly granularity
+     - Changed from `days=30&interval=daily` to `days=2` (auto-hourly)
+     - Updated marketFilterConfig.timeframe: '1d' → '1h'
+   - **Status**: ✅ Deployed - bot now actively searching for opportunities
+
 ### 📊 Current Strategy Configuration
 
 **Entry Conditions (Enhanced)**:
-- Market Health Index > 0
+- Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)
 - Golden Cross: SMA(12) > SMA(26) ✅ **PRIMARY SIGNAL**
 - ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins)
 - **Filter**: SMA slope > 0.1% (trend strength)
