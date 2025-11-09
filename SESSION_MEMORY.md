@@ -410,7 +410,7 @@ git status --ignored | grep .env  # Verify .env ignored
      - NEW (1-min): Peak at $110 captured, sold at $106.70 (+$3.70/token saved)
    - **Status**: ✅ Deployed - major upgrade for volatile meme coin trading
 
-17. **Hourly Market Health Index** (Commit: TBD - Nov 9, 2025)
+17. **Hourly Market Health Index** (Commit: 2fc6c0a - Nov 9, 2025)
    - **CRITICAL FIX**: Market Health calculation was using wrong timeframe
    - **Problem Identified**: User noticed SMA(20) values didn't match Binance charts
      - Bot calculated: BTC SMA20=108010.31, ETH SMA20=3745.73, SOL SMA20=179.77
@@ -441,6 +441,46 @@ git status --ignored | grep .env  # Verify .env ignored
      - Changed from `days=30&interval=daily` to `days=2` (auto-hourly)
      - Updated marketFilterConfig.timeframe: '1d' → '1h'
    - **Status**: ✅ Deployed - bot now actively searching for opportunities
+
+18. **Fixed Golden Cross Detection Lookback** (Commit: 96c0eea - Nov 9, 2025)
+   - **CRITICAL BUG FIX**: Bot missing Golden Cross signals between hourly checks
+   - **User Report**: Lost opportunities on PENG, WIF, and BONK
+     - PENG: Crossed between 13:22-14:22, bot said "already bullish" at 15:22 (no buy)
+     - WIF: Crossed between 14:22-15:23, bot said "already bullish" at 16:23 (no buy)
+     - BONK: Crossed between 15:23-16:23, bot said "already bullish" at 17:23 (no buy)
+   - **Root Cause**: Lookback algorithm was fundamentally broken
+     - Only checked 5 candles back
+     - Checked pairs relative to current candle, not consecutive pairs
+     - Once cross was >5 hours old, it became "stale" and undetectable
+     - With hourly checks + volatile assets, crosses aged out quickly
+   - **Previous (Broken) Algorithm**:
+     ```typescript
+     // Checked if candle[-i] was BEARISH and CURRENT was BULLISH
+     // Only worked if cross happened in last i candles
+     for (i=1; i<=5) check candles[length-i] vs current
+     ```
+   - **New (Fixed) Algorithm**:
+     ```typescript
+     // Checks EVERY consecutive pair in lookback window
+     // Finds cross wherever it occurred in last 24 hours
+     for (currIdx=38; currIdx>14) check [currIdx-1] vs [currIdx]
+     ```
+   - **Changes**:
+     - Increased lookback: 5 → **24 candles** (24 hours)
+     - Fixed loop to check consecutive pairs properly
+     - Added import of logger for proper debug output
+     - Added comprehensive debug logging ([DEBUG], [DEBUG CROSS], [CROSS DETECTION])
+     - Added safety checks for array bounds and undefined values
+   - **Expected Impact**:
+     - Will catch Golden Crosses from last 24 hours on every check
+     - Should buy PENG/WIF/BONK on next cycle if still valid
+     - Drastically reduces missed opportunities
+     - Critical for hourly-check + volatile-meme-coin strategy
+   - **Debugging Added**:
+     - `[DEBUG] Currently bullish, checking candles X back to Y for crossover`
+     - `[DEBUG] Checking N candle(s) ago: prev[i]=BEAR/BULL, curr[i]=BULL/BEAR`
+     - `[CROSS DETECTION] Golden Cross detected N candles ago: ...`
+   - **Status**: ✅ Deployed - next hourly cycle will test the fix
 
 ### 📊 Current Strategy Configuration
 
