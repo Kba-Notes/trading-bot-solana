@@ -1,6 +1,7 @@
 // src/strategy_analyzer/logic.ts
 
 import { SMA, RSI } from 'technicalindicators';
+import { logger } from '../services.js';
 
 // Interface for indicator outputs
 export interface Indicators {
@@ -70,20 +71,60 @@ export function runStrategy(
 
     const { sma12, sma26, rsi14 } = indicators;
 
-    // Improved Golden Cross detection: Check last 3 candles to catch crossovers we might have missed
+    // Improved Golden Cross detection: Calculate full SMA arrays and check for crossovers
     // This is important because we only check once per hour, but crossovers can happen any time
+    // CRITICAL: Since we check hourly but crosses can happen anytime, we need significant lookback
+    // With hourly checks + volatile meme coins, crosses can be "stale" within hours
     let isGoldenCross = false;
-    const lookbackCandles = 3; // Check last 3 candles for crossover
+    const lookbackCandles = 24; // Check last 24 candles (24 hours) to catch any recent crossovers
 
-    for (let i = 1; i <= lookbackCandles && i < closingPrices.length; i++) {
-        const prevSma12 = SMA.calculate({ period: 12, values: closingPrices.slice(0, -i) }).pop()!;
-        const prevSma26 = SMA.calculate({ period: 26, values: closingPrices.slice(0, -i) }).pop()!;
+    // Calculate full SMA arrays (not just the last value)
+    const sma12Array = SMA.calculate({ period: 12, values: closingPrices });
+    const sma26Array = SMA.calculate({ period: 26, values: closingPrices });
 
-        // Check if crossover happened between this candle and current
-        if (prevSma12 <= prevSma26 && sma12 > sma26) {
-            isGoldenCross = true;
-            console.log(`[Golden Cross] Detected crossover ${i} candle(s) ago: prevSMA12=${prevSma12.toFixed(8)} <= prevSMA26=${prevSma26.toFixed(8)}, now SMA12=${sma12.toFixed(8)} > SMA26=${sma26.toFixed(8)}`);
-            break;
+    // Debug: Log current state
+    const currentSma12 = sma12Array[sma12Array.length - 1];
+    const currentSma26 = sma26Array[sma26Array.length - 1];
+    const isCurrentlyBullish = currentSma12 > currentSma26;
+
+    // Only check for crossovers if currently bullish (optimization)
+    if (isCurrentlyBullish) {
+        // Check EVERY consecutive pair of candles in the lookback window
+        // Start from most recent and go back in time
+        const startIdx = sma12Array.length - 1;  // Most recent candle
+        const endIdx = Math.max(0, sma12Array.length - 1 - lookbackCandles);  // Lookback limit
+
+        logger.info(`[DEBUG] Currently bullish, checking candles ${startIdx} back to ${endIdx} for crossover`);
+
+        for (let currIdx = startIdx; currIdx > endIdx; currIdx--) {
+            const prevIdx = currIdx - 1;
+
+            const prevSma12 = sma12Array[prevIdx];
+            const prevSma26 = sma26Array[prevIdx];
+            const currSma12 = sma12Array[currIdx];
+            const currSma26 = sma26Array[currIdx];
+
+            // Safety check for undefined values
+            if (prevSma12 === undefined || prevSma26 === undefined || currSma12 === undefined || currSma26 === undefined) {
+                continue;
+            }
+
+            // Debug logging for first few checks
+            const candlesAgo = startIdx - currIdx + 1;
+            if (candlesAgo <= 3) {
+                const wasBearish = prevSma12 <= prevSma26;
+                const isBullish = currSma12 > currSma26;
+                logger.info(`[DEBUG] Checking ${candlesAgo} candle(s) ago: prev[${prevIdx}]=${wasBearish ? 'BEAR' : 'BULL'}, curr[${currIdx}]=${isBullish ? 'BULL' : 'BEAR'}`);
+            }
+
+            // Check if crossover happened between these two consecutive candles
+            if (prevSma12 <= prevSma26 && currSma12 > currSma26) {
+                isGoldenCross = true;
+                const candlesAgo = startIdx - currIdx + 1;
+                const crossMessage = `Golden Cross detected ${candlesAgo} candle(s) ago: prev[${prevIdx}] SMA12=${prevSma12.toFixed(8)} <= SMA26=${prevSma26.toFixed(8)}, curr[${currIdx}] SMA12=${currSma12.toFixed(8)} > SMA26=${currSma26.toFixed(8)}`;
+                logger.info(`[CROSS DETECTION] ${crossMessage}`);
+                break;
+            }
         }
     }
 
