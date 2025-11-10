@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Without trailing**: Shows distance to activation and stop loss with $ amounts
   - **With trailing**: Shows distance to new high and distance to trail hit with $ amounts
   - Example: `[Targets] BONK: New high=1.19% away ($0.00000016), Trail hit=1.85% away ($0.00000025)`
+- **Interactive Telegram Commands** - On-demand access to logs and status via chat commands
+  - `/logs [minutes]` - Get recent logs (1-60 minutes, default 1)
+  - `/status` - Get instant position snapshot with P&L
+  - `/help` - Show available commands
+  - Chat ID verification for security
+- **Automatic Log Rotation** - Implemented winston-daily-rotate-file
+  - Daily log files with date pattern: `trading-bot-YYYY-MM-DD.log`
+  - 10MB max file size before rotation
+  - 7-day retention policy (auto-delete old logs)
+  - Prevents unbounded log file growth
 
 ### Changed
 - **Log format migrated** - From JSON (`{"level":"info","message":"..."}`) to plain text
@@ -41,10 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - New file: `src/state/assetStates.ts` - State persistence module
+- New file: `src/notifier/commandHandler.ts` - Telegram command handlers
 - Rewritten: `src/strategy_analyzer/logic.ts` - Simplified from ~150 lines to ~80 lines
-- Modified: `src/bot.ts` - Integrated state loading, saving, and reset on sell
+- Modified: `src/bot.ts` - Integrated state loading, saving, reset on sell, and highest price tracking
 - Modified: `src/notifier/telegram.ts` - Updated log extraction to parse plain text format
-- Modified: `src/services.ts` - Changed Winston logger format from JSON to readable text
+- Modified: `src/services.ts` - Changed Winston logger format from JSON to readable text, enabled Telegram polling, added DailyRotateFile
+- Added dependency: `winston-daily-rotate-file` for automatic log rotation
 
 ## [2.3.0] - 2025-10-27
 
