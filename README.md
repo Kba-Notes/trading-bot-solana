@@ -189,13 +189,14 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.3.0
+**Current Version:** 2.4.0
 
-### Latest Updates (v2.3.0)
-- Migrated from Birdeye to GeckoTerminal API for unlimited historical data
-- Eliminated monthly quota limits (30K CUs/month → 43,200 requests/day)
-- All APIs now free tier with no API keys required
-- Improved reliability and eliminated downtime from rate limits
+### Latest Updates (v2.4.0)
+- **Stateful Golden Cross Detection** - Eliminated missed opportunities by tracking state across cycles
+- **Enhanced Log Formatting** - Cleaner, more readable logs with absolute dollar values
+- **Complete Targets Visibility** - Shows distances to both new highs and trailing stops
+- **Fixed Telegram Attachments** - Properly extracts plain text logs for cycle summaries
+- **8 Decimal Precision** - Better visibility for low-price tokens like BONK
 
 ## Disclaimer
 

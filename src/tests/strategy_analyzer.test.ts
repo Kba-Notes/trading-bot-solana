@@ -39,7 +39,7 @@ async function runStrategyTest() {
             continue;
         }
 
-        const decision = runStrategy(historicalPrices, 1);
+        const decision = runStrategy(token.mint, historicalPrices, 1);
         console.log(`Decisión final para ${token.name}:`);
         console.log(decision);
         

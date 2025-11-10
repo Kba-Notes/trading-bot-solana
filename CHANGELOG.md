@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2025-11-10
+
+### Added
+- **Stateful Golden Cross Detection** - Complete rewrite from array-based lookback to clean state comparison
+  - Stores previous BULLISH/BEARISH state in persistent JSON file (`data/assetStates.json`)
+  - Detects Golden Cross by comparing previous cycle state vs current state
+  - State survives bot restarts and is reset to BEARISH on every sell
+  - Eliminates complex SMA array calculations and lookback windows
+  - Simple logic: if `previous === BEARISH && current === BULLISH` → BUY
+- **Enhanced Log Formatting** - Cleaner, more readable logs with better visibility
+  - Simplified format: `2025-11-10 12:35:53 -> [Message]` (removed JSON clutter)
+  - Absolute dollar values added to all percentage distances
+  - Dynamic decimal precision: 8 decimals for prices < $0.01, 6 for larger prices
+  - Position monitoring now shows both directions: distance to new high AND distance to trailing stop hit
+- **Complete Targets Visibility** - Added [Targets] line for ALL positions
+  - **Without trailing**: Shows distance to activation and stop loss with $ amounts
+  - **With trailing**: Shows distance to new high and distance to trail hit with $ amounts
+  - Example: `[Targets] BONK: New high=1.19% away ($0.00000016), Trail hit=1.85% away ($0.00000025)`
+
+### Changed
+- **Log format migrated** - From JSON (`{"level":"info","message":"..."}`) to plain text
+- **Removed "High" field** - Trailing stop logs now only show Trail Stop and Current price
+- **Telegram log attachments fixed** - Now properly extracts plain text logs instead of JSON
+
+### Fixed
+- **Golden Cross detection reliability** - Bot was missing crosses between hourly checks
+  - User reported: PENG, WIF, BONK all crossed but bot said "already bullish" instead of buying
+  - Root cause: Overcomplicated array-based lookback with index alignment issues
+  - Solution: Clean stateful approach that compares previous vs current state
+  - Result: Successfully detected and bought WIF, PENG, BONK on first cycle after fix
+- **Log extraction for Telegram** - Fixed to handle new plain text format instead of JSON parsing
+
+### Technical Details
+- New file: `src/state/assetStates.ts` - State persistence module
+- Rewritten: `src/strategy_analyzer/logic.ts` - Simplified from ~150 lines to ~80 lines
+- Modified: `src/bot.ts` - Integrated state loading, saving, and reset on sell
+- Modified: `src/notifier/telegram.ts` - Updated log extraction to parse plain text format
+- Modified: `src/services.ts` - Changed Winston logger format from JSON to readable text
+
 ## [2.3.0] - 2025-10-27
 
 ### Changed

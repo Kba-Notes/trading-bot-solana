@@ -218,7 +218,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-10-30 (Latest session - GeckoTerminal + Position monitoring + Sell retry + Log attachments + Optional RSI + Buy retry + Golden Cross lookback + Telegram log fixes + SELL log attachments)
+**Last Updated**: 2025-11-10 (Latest session - Stateful Golden Cross + Enhanced log formatting + Complete targets visibility)
 **Status**: ✅ Ready for continuous development
 
 ---
@@ -481,6 +481,92 @@ git status --ignored | grep .env  # Verify .env ignored
      - `[DEBUG] Checking N candle(s) ago: prev[i]=BEAR/BULL, curr[i]=BULL/BEAR`
      - `[CROSS DETECTION] Golden Cross detected N candles ago: ...`
    - **Status**: ✅ Deployed - next hourly cycle will test the fix
+
+19. **Stateful Golden Cross Detection** (Commit: TBD - Nov 10, 2025)
+   - **MAJOR REWRITE**: Eliminated array-based lookback for clean state comparison
+   - **User Problem**: Bot missing Golden Cross signals between hourly checks
+     - PENG at 13:22: BEARISH, bot said "waiting for crossover" ✅
+     - PENG at 14:22: BULLISH, bot said "already bullish, waiting for new crossover" ❌ NO BUY
+     - Same pattern for WIF and BONK - 3 missed opportunities
+   - **Root Cause**: Overcomplicated array-based lookback with index alignment issues
+     - Attempting to recalculate SMAs on sliced arrays
+     - Complex loops checking multiple candles back
+     - Undefined values and index mismatches
+   - **User's Solution** (Clean and Simple):
+     1. Check market health (already done)
+     2. For each token without open position, calculate current state (BULLISH/BEARISH)
+     3. Compare with previous state stored from last cycle
+     4. If previous was BEARISH and current is BULLISH → BUY
+     5. Store current state for next cycle
+     6. Reset state to BEARISH when we sell
+   - **Implementation**:
+     - **New file**: `src/state/assetStates.ts` - State persistence module
+     - **Rewritten**: `src/strategy_analyzer/logic.ts` - From ~150 lines to ~80 lines
+     - **Modified**: `src/bot.ts` - Load states on startup, reset on sell
+     - State stored in: `data/assetStates.json` (survives restarts)
+     - Uses asset mint address as unique identifier
+   - **Success**: First cycle after deployment detected Golden Crosses for:
+     - WIF: Previous BEARISH → Current BULLISH → BUY ✅
+     - PENG: Previous BEARISH → Current BULLISH → BUY ✅
+     - BONK: Previous BEARISH → Current BULLISH → BUY ✅ (failed execution, not our code)
+   - **Benefits**:
+     - Drastically simplified logic
+     - No more missed crosses between cycles
+     - Clean state management
+     - Reliable and maintainable
+   - **Status**: ✅ Deployed and verified - perfect detection rate
+
+20. **Enhanced Log Formatting** (Commit: TBD - Nov 10, 2025)
+   - **MAJOR UX IMPROVEMENT**: Complete log format overhaul
+   - **User Requests**: 4 specific improvements requested
+     1. Add absolute dollar values to all percentage distances
+     2. Remove "High" value from trailing stop logs (only show Trail Stop and Current)
+     3. Increase BONK decimals from 6 to 8 for better visibility
+     4. Simplify log format from JSON to readable timestamp + message
+   - **Changes Implemented**:
+     - **Format migration**: `{"level":"info","message":"...","timestamp":"..."}`
+       → `2025-11-10 12:35:53 -> [Message]`
+     - **Dynamic decimals**: 8 decimals for prices < $0.01, 6 for larger (BONK now shows $0.00001310)
+     - **Absolute values**: All percentages now show dollar amounts
+       - Example: `Trailing activation=0.13% away ($0.000468), SL=3.83% away ($0.013754)`
+     - **Simplified trailing logs**: Removed "High" field
+       - OLD: `[Trailing Stop] WIF: High=$0.497965, Trail Stop=$0.483026, Current=$0.488555`
+       - NEW: `[Trailing Stop] WIF: Trail Stop=$0.483026, Current=$0.487799`
+   - **Files Modified**:
+     - `src/services.ts` - Changed Winston format from JSON to plain text
+     - `src/bot.ts` - Added absolute value calculations and dynamic decimals
+     - `src/notifier/telegram.ts` - Fixed log extraction to parse plain text instead of JSON
+   - **Benefits**:
+     - Much more readable logs
+     - Clear understanding of price distances
+     - Better visibility for low-price tokens
+     - Cleaner Telegram log attachments
+   - **Status**: ✅ Deployed - all logs now in new format
+
+21. **Complete Targets Visibility** (Commit: TBD - Nov 10, 2025)
+   - **USER REQUEST**: "can we add the 'Target' even for the positions in which the trail has been already activated"
+   - **Problem**: [Targets] line only showed for positions without trailing stop
+     - User wanted to see distance information for ALL positions
+   - **Solution**: Added [Targets] line for positions with trailing stop active
+     - Shows TWO directions:
+       1. **New high**: How much price needs to rise to beat current high and move trailing up
+       2. **Trail hit**: How much price can drop before hitting trailing stop and selling
+   - **Example Output**:
+     ```
+     [Position Monitor] WIF: Entry=$0.482689, Current=$0.487312, P&L=+0.96% (+$4.79)
+     [Trailing Stop] WIF: Trail Stop=$0.483026, Current=$0.487312
+     [Targets] WIF: New high=2.19% away ($0.010652), Trail hit=0.88% away ($0.004286)
+     ```
+   - **For BONK (8 decimals)**:
+     ```
+     [Targets] BONK: New high=1.19% away ($0.00000016), Trail hit=1.85% away ($0.00000025)
+     ```
+   - **Benefits**:
+     - Complete visibility into position dynamics
+     - Know exactly how much upside needed to move trailing
+     - Know exactly how much downside before exit
+     - Better understanding of risk/reward in real-time
+   - **Status**: ✅ Deployed - all positions show full targets information
 
 ### 📊 Current Strategy Configuration
 

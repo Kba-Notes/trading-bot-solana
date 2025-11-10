@@ -6,10 +6,11 @@ import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from '
 import { runStrategy } from './strategy_analyzer/logic.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
 import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
+import { loadAssetStates, resetState } from './state/assetStates.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
 import { sleep, executeWithTiming } from './utils/async.js';
-import { API_DELAYS, BOT_CONSTANTS } from './constants.js';
+import { API_DELAYS, BOT_CONSTANTS, RETRY_CONFIG } from './constants.js';
 import { validateEnvironment } from './config/env-validator.js';
 import { ShutdownManager } from './utils/shutdown.js';
 import { PerformanceMetrics } from './monitoring/metrics.js';
@@ -24,22 +25,32 @@ const strategy = new GoldenCrossStrategy({
     rsiThreshold: strategyConfig.rsiThreshold
 });
 
-// Fetches historical price data from CoinGecko
+// Fetches historical price data from CoinGecko with retry logic
 // CoinGecko auto-granularity: 1-90 days = hourly data, >90 days = daily data
-async function getCoingeckoHistoricalData(id: string): Promise<number[]> {
-    try {
-        // Request last 2 days of data = automatic hourly granularity (48 hourly candles)
-        // This gives us enough data for SMA(20) on hourly timeframe
-        const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=2`;
-        const response = await axios.get(url);
-        if (response.data && response.data.prices) {
-            return response.data.prices.map((priceEntry: [number, number]) => priceEntry[1]);
+async function getCoingeckoHistoricalData(id: string, retries: number = 3): Promise<number[]> {
+    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=2`;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            // Request last 2 days of data = automatic hourly granularity (48 hourly candles)
+            // This gives us enough data for SMA(20) on hourly timeframe
+            const response = await axios.get(url);
+            if (response.data && response.data.prices) {
+                return response.data.prices.map((priceEntry: [number, number]) => priceEntry[1]);
+            }
+            return [];
+        } catch (error: any) {
+            if (attempt < retries) {
+                const backoffDelay = Math.min(RETRY_CONFIG.BASE_DELAY * Math.pow(2, attempt - 1), RETRY_CONFIG.MAX_DELAY);
+                logger.warn(`Error fetching CoinGecko data for ${id} (attempt ${attempt}/${retries}): ${error.message}. Retrying in ${backoffDelay}ms...`);
+                await sleep(backoffDelay);
+            } else {
+                logger.error(`Error fetching CoinGecko data for ${id} after ${retries} attempts: ${error.message}`);
+                return [];
+            }
         }
-        return [];
-    } catch (error: any) {
-        logger.error(`Error fetching CoinGecko data for ${id}:`, error.message);
-        return [];
     }
+    return [];
 }
 
 // Fetches historical price data from Birdeye (used for SOL)
@@ -62,6 +73,7 @@ async function getBirdeyeHistoricalData(mint: string): Promise<number[]> {
 
 async function calculateMarketHealth(): Promise<number> {
     let weightedDistanceSum = 0;
+    let totalWeightProcessed = 0;
     logger.info('Calculating Market Health Index...');
 
     for (const asset of marketFilterConfig.assets) {
@@ -69,8 +81,15 @@ async function calculateMarketHealth(): Promise<number> {
         const prices = await getCoingeckoHistoricalData(asset.id);
 
         if (prices.length < marketFilterConfig.indicatorPeriod) {
-            logger.warn(`Insufficient data for ${asset.name} in market filter.`);
-            return 0; // If an asset fails, filter is invalid for safety
+            // Fallback: Treat failed asset as 0% distance (neutral contribution)
+            logger.warn(`Insufficient data for ${asset.name} in market filter. Using 0% distance as fallback.`);
+            const distance = 0;
+            weightedDistanceSum += distance * asset.weight;
+            totalWeightProcessed += asset.weight;
+            logger.info(`  - ${asset.name}: FAILED (using 0% distance fallback)`);
+            // Pause to be respectful with free APIs
+            await sleep(API_DELAYS.MARKET_DATA_API);
+            continue;
         }
 
         const currentPrice = prices[prices.length - 1];
@@ -78,12 +97,14 @@ async function calculateMarketHealth(): Promise<number> {
 
         const distance = ((currentPrice - sma) / sma) * 100;
         weightedDistanceSum += distance * asset.weight;
+        totalWeightProcessed += asset.weight;
 
         logger.info(`  - ${asset.name}: Price=${currentPrice.toFixed(2)}, SMA20=${sma.toFixed(2)}, Distance=${distance.toFixed(2)}%`);
         // Pause to be respectful with free APIs
         await sleep(API_DELAYS.MARKET_DATA_API);
     }
-    logger.info(`Final Market Health Index: ${weightedDistanceSum.toFixed(2)}`);
+
+    logger.info(`Final Market Health Index: ${weightedDistanceSum.toFixed(2)} (processed ${(totalWeightProcessed * 100).toFixed(0)}% of weight)`);
     return weightedDistanceSum;
 }
 
@@ -108,8 +129,11 @@ async function checkOpenPositions() {
         const pnlUSDC = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
         const pnlSign = pnlPercent >= 0 ? '+' : '';
 
+        // Determine decimal places based on price magnitude
+        const decimals = currentPrice < 0.01 ? 8 : 6;
+
         // Log position status with P&L
-        logger.info(`[Position Monitor] ${assetConfig.name}: Entry=$${position.entryPrice.toFixed(6)}, Current=$${currentPrice.toFixed(6)}, P&L=${pnlSign}${pnlPercent.toFixed(2)}% (${pnlSign}$${pnlUSDC.toFixed(2)})`);
+        logger.info(`[Position Monitor] ${assetConfig.name}: Entry=$${position.entryPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}, P&L=${pnlSign}${pnlPercent.toFixed(2)}% (${pnlSign}$${pnlUSDC.toFixed(2)})`);
 
         const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
 
@@ -120,7 +144,7 @@ async function checkOpenPositions() {
         if (currentPrice >= profitThreshold && !position.trailingStopActive) {
             position.trailingStopActive = true;
             position.highestPrice = currentPrice;
-            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(6)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
+            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(decimals)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
         }
 
         // If trailing stop is active, monitor it regardless of current price level
@@ -131,12 +155,21 @@ async function checkOpenPositions() {
             // Trail 3% below highest price (balanced for meme coin volatility with 1-min checks)
             const trailingStopPrice = position.highestPrice * 0.97;
 
-            // Log trailing stop status
-            logger.info(`[Trailing Stop] ${assetConfig.name}: High=$${position.highestPrice.toFixed(6)}, Trail Stop=$${trailingStopPrice.toFixed(6)}, Current=$${currentPrice.toFixed(6)}`);
+            // Log trailing stop status (removed High, kept only Trail Stop and Current)
+            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}`);
+
+            // Show distance to move trailing up (how much price needs to rise to beat current high)
+            const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
+            const distanceToNewHighUSDC = position.highestPrice - currentPrice;
+            const distanceToTrailingStop = ((currentPrice - trailingStopPrice) / currentPrice) * 100;
+            const distanceToTrailingStopUSDC = currentPrice - trailingStopPrice;
+            logger.info(`[Targets] ${assetConfig.name}: New high=${distanceToNewHigh.toFixed(2)}% away ($${distanceToNewHighUSDC.toFixed(decimals)}), Trail hit=${distanceToTrailingStop.toFixed(2)}% away ($${distanceToTrailingStopUSDC.toFixed(decimals)})`);
 
             if (currentPrice < trailingStopPrice) {
-                logger.info(`🎯 Trailing stop hit for ${assetConfig.name}! High: $${position.highestPrice.toFixed(6)}, Current: $${currentPrice.toFixed(6)}`);
+                logger.info(`🎯 Trailing stop hit for ${assetConfig.name}! Trail Stop: $${trailingStopPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
                 await executeSellOrder(position);
+                // Reset state to BEARISH after selling
+                resetState(position.asset);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
@@ -147,20 +180,24 @@ async function checkOpenPositions() {
         let sellReason = '';
 
         if (currentPrice <= stopLossPrice) {
-            logger.info(`⛔ STOP LOSS reached for ${assetConfig.name}! Stop: $${stopLossPrice.toFixed(6)}, Current: $${currentPrice.toFixed(6)}`);
+            logger.info(`⛔ STOP LOSS reached for ${assetConfig.name}! Stop: $${stopLossPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
             shouldSell = true;
             sellReason = 'Stop Loss';
         } else {
             // Log distance to activation/stop loss if not trailing yet
             if (!position.trailingStopActive) {
                 const distanceToActivation = ((profitThreshold - currentPrice) / currentPrice) * 100;
+                const distanceToActivationUSDC = profitThreshold - currentPrice;
                 const distanceToSL = ((currentPrice - stopLossPrice) / currentPrice) * 100;
-                logger.info(`[Targets] ${assetConfig.name}: Trailing activation=${distanceToActivation.toFixed(2)}% away, SL=${distanceToSL.toFixed(2)}% away`);
+                const distanceToSLUSDC = currentPrice - stopLossPrice;
+                logger.info(`[Targets] ${assetConfig.name}: Trailing activation=${distanceToActivation.toFixed(2)}% away ($${distanceToActivationUSDC.toFixed(decimals)}), SL=${distanceToSL.toFixed(2)}% away ($${distanceToSLUSDC.toFixed(decimals)})`);
             }
         }
 
         if (shouldSell) {
             await executeSellOrder(position);
+            // Reset state to BEARISH after selling
+            resetState(position.asset);
         }
         await sleep(API_DELAYS.RATE_LIMIT);
     }
@@ -193,7 +230,7 @@ async function findNewOpportunities(marketHealthIndex: number) {
             continue;
         }
 
-        const { decision, indicators } = runStrategy(historicalPrices, marketHealthIndex, strategyConfig.requireRsiConfirmation);
+        const { decision, indicators } = runStrategy(asset.mint, historicalPrices, marketHealthIndex, strategyConfig.requireRsiConfirmation);
 
         // Detailed logging
         if (indicators) {
@@ -254,6 +291,9 @@ async function main() {
 
         // Initialize trader and load persisted positions
         await initializeTrader();
+
+        // Load asset states (previous BULLISH/BEARISH states)
+        loadAssetStates();
 
         sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
 

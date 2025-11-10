@@ -8,10 +8,17 @@ const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.json()
+    winston.format.printf(info => `${info.timestamp} -> ${info.message}`)
   ),
   transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({
+      filename: 'error.log',
+      level: 'error',
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.printf(info => `${info.timestamp} -> [ERROR] ${info.message}`)
+      )
+    }),
     new winston.transports.File({ filename: 'trading-bot.log' }),
   ],
 });

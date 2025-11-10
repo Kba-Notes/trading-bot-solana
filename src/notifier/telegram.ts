@@ -61,24 +61,35 @@ async function extractCycleLogs(): Promise<string | null> {
 
         // Filter logs from current cycle
         const cycleLogs: string[] = [];
-        const cycleStartTimestamp = currentCycleStartTime.toISOString().split('T')[0]; // YYYY-MM-DD format
 
         for (const line of logLines) {
             if (!line.trim()) continue;
 
-            try {
-                const logEntry = JSON.parse(line);
-                const logTime = new Date(logEntry.timestamp);
+            // New format: "2025-11-10 12:35:53 -> [Message]"
+            // Extract timestamp from the beginning of the line
+            const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+
+            if (timestampMatch) {
+                const logTime = new Date(timestampMatch[1]);
 
                 // Include logs from current cycle onwards
                 if (logTime >= currentCycleStartTime) {
-                    // Format for readability
-                    const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
-                    cycleLogs.push(formattedLine);
+                    cycleLogs.push(line);
                 }
-            } catch (parseError) {
-                // Skip malformed lines
-                continue;
+            } else {
+                // Try old JSON format for backwards compatibility
+                try {
+                    const logEntry = JSON.parse(line);
+                    const logTime = new Date(logEntry.timestamp);
+
+                    if (logTime >= currentCycleStartTime) {
+                        const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
+                        cycleLogs.push(formattedLine);
+                    }
+                } catch (parseError) {
+                    // Skip malformed lines
+                    continue;
+                }
             }
         }
 
@@ -128,19 +139,31 @@ async function extractOperationLogs(operationType: string, assetName: string): P
         for (const line of logLines) {
             if (!line.trim()) continue;
 
-            try {
-                const logEntry = JSON.parse(line);
-                const logTime = new Date(logEntry.timestamp);
+            // New format: "2025-11-10 12:35:53 -> [Message]"
+            // Extract timestamp from the beginning of the line
+            const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+
+            if (timestampMatch) {
+                const logTime = new Date(timestampMatch[1]);
 
                 // Include logs from current operation onwards
                 if (logTime >= currentOperationStartTime) {
-                    // Format for readability
-                    const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
-                    operationLogs.push(formattedLine);
+                    operationLogs.push(line);
                 }
-            } catch (parseError) {
-                // Skip malformed lines
-                continue;
+            } else {
+                // Try old JSON format for backwards compatibility
+                try {
+                    const logEntry = JSON.parse(line);
+                    const logTime = new Date(logEntry.timestamp);
+
+                    if (logTime >= currentOperationStartTime) {
+                        const formattedLine = `[${logEntry.timestamp}] ${logEntry.level.toUpperCase()}: ${logEntry.message}`;
+                        operationLogs.push(formattedLine);
+                    }
+                } catch (parseError) {
+                    // Skip malformed lines
+                    continue;
+                }
             }
         }
 

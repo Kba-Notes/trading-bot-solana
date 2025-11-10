@@ -2,6 +2,7 @@
 
 import { SMA, RSI } from 'technicalindicators';
 import { logger } from '../services.js';
+import { getPreviousState, updateState } from '../state/assetStates.js';
 
 // Interface for indicator outputs
 export interface Indicators {
@@ -41,18 +42,23 @@ export function calculateIndicators(closingPrices: number[]): Indicators | null 
 
 
 /**
- * Main function that analyzes an asset and returns a trading decision and calculated indicators.
+ * Main function that analyzes an asset and returns a trading decision.
+ * Uses stateful comparison: compares current trend with previous cycle's trend.
+ *
+ * @param assetMint The mint address of the asset (used as unique identifier)
  * @param closingPrices The closing prices of the asset to analyze.
  * @param marketHealthIndex The result of the market filter.
  * @param requireRsiConfirmation Whether to require RSI > 50 for entries (default: false for meme coins)
  * @returns An object with the final decision and the indicators used.
  */
 export function runStrategy(
+    assetMint: string,
     closingPrices: number[],
     marketHealthIndex: number,
     requireRsiConfirmation: boolean = false
 ): { decision: Action; indicators: Indicators | null } {
 
+    // Step 1: Check market health
     if (marketHealthIndex <= 0) {
         return {
             decision: { action: 'HOLD', reason: 'Negative market filter. Buying disabled.' },
@@ -60,6 +66,7 @@ export function runStrategy(
         };
     }
 
+    // Step 2: Calculate current indicators
     const indicators = calculateIndicators(closingPrices);
 
     if (!indicators) {
@@ -71,100 +78,54 @@ export function runStrategy(
 
     const { sma12, sma26, rsi14 } = indicators;
 
-    // Improved Golden Cross detection: Calculate full SMA arrays and check for crossovers
-    // This is important because we only check once per hour, but crossovers can happen any time
-    // CRITICAL: Since we check hourly but crosses can happen anytime, we need significant lookback
-    // With hourly checks + volatile meme coins, crosses can be "stale" within hours
-    let isGoldenCross = false;
-    const lookbackCandles = 24; // Check last 24 candles (24 hours) to catch any recent crossovers
+    // Step 3: Determine current trend state
+    const currentState = sma12 > sma26 ? 'BULLISH' : 'BEARISH';
 
-    // Calculate full SMA arrays (not just the last value)
-    const sma12Array = SMA.calculate({ period: 12, values: closingPrices });
-    const sma26Array = SMA.calculate({ period: 26, values: closingPrices });
+    // Step 4: Get previous state from storage
+    const previousState = getPreviousState(assetMint);
 
-    // Debug: Log current state
-    const currentSma12 = sma12Array[sma12Array.length - 1];
-    const currentSma26 = sma26Array[sma26Array.length - 1];
-    const isCurrentlyBullish = currentSma12 > currentSma26;
+    logger.info(`[STATE] Asset: ${assetMint.slice(0, 8)}... | Previous: ${previousState} | Current: ${currentState} | SMA12=${sma12.toFixed(8)}, SMA26=${sma26.toFixed(8)}, RSI=${rsi14.toFixed(2)}`);
 
-    // Only check for crossovers if currently bullish (optimization)
-    if (isCurrentlyBullish) {
-        // Check EVERY consecutive pair of candles in the lookback window
-        // Start from most recent and go back in time
-        const startIdx = sma12Array.length - 1;  // Most recent candle
-        const endIdx = Math.max(0, sma12Array.length - 1 - lookbackCandles);  // Lookback limit
+    // Step 5: Update state for next cycle
+    updateState(assetMint, currentState);
 
-        logger.info(`[DEBUG] Currently bullish, checking candles ${startIdx} back to ${endIdx} for crossover`);
+    // Step 6: Check for Golden Cross (BEARISH → BULLISH transition)
+    if (previousState === 'BEARISH' && currentState === 'BULLISH') {
+        // Golden Cross detected!
+        const isRsiOk = rsi14 > 50;
 
-        for (let currIdx = startIdx; currIdx > endIdx; currIdx--) {
-            const prevIdx = currIdx - 1;
-
-            const prevSma12 = sma12Array[prevIdx];
-            const prevSma26 = sma26Array[prevIdx];
-            const currSma12 = sma12Array[currIdx];
-            const currSma26 = sma26Array[currIdx];
-
-            // Safety check for undefined values
-            if (prevSma12 === undefined || prevSma26 === undefined || currSma12 === undefined || currSma26 === undefined) {
-                continue;
-            }
-
-            // Debug logging for first few checks
-            const candlesAgo = startIdx - currIdx + 1;
-            if (candlesAgo <= 3) {
-                const wasBearish = prevSma12 <= prevSma26;
-                const isBullish = currSma12 > currSma26;
-                logger.info(`[DEBUG] Checking ${candlesAgo} candle(s) ago: prev[${prevIdx}]=${wasBearish ? 'BEAR' : 'BULL'}, curr[${currIdx}]=${isBullish ? 'BULL' : 'BEAR'}`);
-            }
-
-            // Check if crossover happened between these two consecutive candles
-            if (prevSma12 <= prevSma26 && currSma12 > currSma26) {
-                isGoldenCross = true;
-                const candlesAgo = startIdx - currIdx + 1;
-                const crossMessage = `Golden Cross detected ${candlesAgo} candle(s) ago: prev[${prevIdx}] SMA12=${prevSma12.toFixed(8)} <= SMA26=${prevSma26.toFixed(8)}, curr[${currIdx}] SMA12=${currSma12.toFixed(8)} > SMA26=${currSma26.toFixed(8)}`;
-                logger.info(`[CROSS DETECTION] ${crossMessage}`);
-                break;
-            }
-        }
-    }
-
-    const isRsiOk = rsi14 > 50;
-
-    // Entry logic: Golden Cross is primary signal
-    // RSI confirmation is optional (better for meme coins which often rally from oversold)
-    if (requireRsiConfirmation) {
-        // Conservative mode: Require both Golden Cross AND RSI > 50
-        if (isGoldenCross && isRsiOk) {
+        if (requireRsiConfirmation && !isRsiOk) {
             return {
-                decision: { action: 'BUY', reason: 'Golden Cross (SMA 12/26) and RSI > 50' },
-                indicators: indicators
+                decision: {
+                    action: 'HOLD',
+                    reason: `Golden Cross detected but RSI too low (${rsi14.toFixed(2)} < 50)`
+                },
+                indicators
             };
         }
-    } else {
-        // Aggressive mode (default for meme coins): Golden Cross alone is enough
-        if (isGoldenCross) {
-            return {
-                decision: { action: 'BUY', reason: `Golden Cross (SMA 12/26) detected${isRsiOk ? ' with RSI > 50' : ` (RSI: ${rsi14.toFixed(2)})`}` },
-                indicators: indicators
-            };
-        }
+
+        logger.info(`[GOLDEN CROSS] Detected for ${assetMint.slice(0, 8)}! Transition from BEARISH to BULLISH`);
+        return {
+            decision: {
+                action: 'BUY',
+                reason: `Golden Cross (SMA 12/26)${isRsiOk ? ' with RSI > 50' : ` (RSI: ${rsi14.toFixed(2)})`}`
+            },
+            indicators
+        };
     }
 
-    // Logic to explain HOLD decision
-    let holdReason = 'Buy conditions not met.';
-    if (isGoldenCross && !isRsiOk && requireRsiConfirmation) {
-        // Golden Cross detected but RSI filter blocked entry
-        holdReason = `Golden Cross detected but RSI below 50 (${rsi14.toFixed(2)}), waiting for momentum confirmation.`;
-    } else if (sma12 > sma26) {
-        holdReason = 'Trend already bullish, waiting for new crossover.';
-    } else if (!isRsiOk && requireRsiConfirmation) {
-        holdReason = `RSI below 50 (${rsi14.toFixed(2)}), insufficient strength.`;
-    } else {
+    // Step 7: No Golden Cross - return appropriate HOLD reason
+    let holdReason: string;
+
+    if (currentState === 'BEARISH') {
         holdReason = 'SMA 12 below SMA 26, waiting for crossover.';
+    } else {
+        // currentState === 'BULLISH' && previousState === 'BULLISH'
+        holdReason = 'Trend already bullish, waiting for new crossover.';
     }
 
     return {
         decision: { action: 'HOLD', reason: holdReason },
-        indicators: indicators
+        indicators
     };
 }
