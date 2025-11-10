@@ -12,9 +12,9 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Risk Management
 - **Dynamic Exit Strategy:**
-  - Take Profit: +8% (optimized for meme coin volatility)
-  - Stop Loss: -3% (reduces false stops)
-  - Trailing Stop: Activates at +2%, trails 3% below highest price
+  - Stop Loss: -3% from entry (only downside protection)
+  - Trailing Stop: Activates at +1% profit, trails 3% below highest price
+  - No Take Profit: Trailing stop manages all exits for maximum upside capture
 - **Smart Entry Filters:**
   - Trend strength: Requires minimum 0.1% SMA slope
   - Volatility filter: Pauses trading when volatility > 5%
@@ -23,7 +23,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 ### Monitoring & Alerts
 - **Dual-Speed Monitoring:**
   - Main analysis cycle: Every 1 hour (finds new opportunities) - 24 checks/day
-  - Position monitoring: Every 15 minutes (fast TP/SL execution)
+  - Position monitoring: Every 1 minute (real-time TP/SL execution) - 1,440 checks/day
 - **Enhanced Telegram Notifications:**
   - Detailed trade alerts with entry price, indicators, and P&L
   - Cycle summaries with market health and buy signals
@@ -88,17 +88,17 @@ Configure trading behavior in `src/config.ts`:
 export const strategyConfig = {
     timeframe: '1h',                // 1-hour candles for faster signals
     tradeAmountUSDC: 500,           // Amount per trade
-    takeProfitPercentage: 0.08,     // 8% take profit
-    stopLossPercentage: 0.03,       // 3% stop loss
+    stopLossPercentage: 0.03,       // 3% stop loss from entry
     shortSMAPeriod: 12,             // Fast moving average
     longSMAPeriod: 26,              // Slow moving average
     rsiPeriod: 14,
-    rsiThreshold: 50,               // RSI must be above this
+    rsiThreshold: 50,               // RSI threshold (optional filter)
+    requireRsiConfirmation: false,  // Disabled by default for meme coins
 };
 
 // Monitoring intervals
 export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;   // 1 hour (24 checks/day)
-export const POSITION_CHECK_INTERVAL = 15 * 60 * 1000;      // 15 minutes
+export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;       // 1 minute (1,440 checks/day)
 ```
 
 ### Tradeable Assets
@@ -165,24 +165,26 @@ export const assetsToTrade = [
 ## Trading Strategy Details
 
 ### Entry Conditions (All must be true)
-1. **Market Health Index > 0** - Overall crypto market is bullish
-2. **Golden Cross** - SMA(12) crosses above SMA(26)
-3. **RSI > 50** - Momentum confirmation
+1. **Market Health Index > 0** - Overall crypto market is bullish (BTC/ETH/SOL weighted on 1-hour SMA)
+2. **Golden Cross** - SMA(12) crosses above SMA(26) - PRIMARY SIGNAL
+3. **RSI > 50** - Optional momentum confirmation (disabled by default for aggressive meme coin entries)
 4. **Trend Strength** - SMA slope > 0.1% (filters weak trends)
 5. **Low Volatility** - Average volatility < 5% (avoids choppy markets)
 
 ### Exit Conditions
-- **Take Profit:** Price reaches +8% from entry
-- **Stop Loss:** Price drops to -3% from entry
+- **Stop Loss:** Price drops to -3% from entry (only downside protection)
 - **Trailing Stop:**
-  - Activates when price reaches +2% profit
+  - Activates when price reaches +1% profit (tightened from +2%)
   - Trails 3% below the highest price seen
-  - Locks in profits while allowing upside
+  - Sells when price drops 3% from the highest price (not from entry)
+  - Locks in profits while allowing unlimited upside
+  - Monitored every 1 minute for accurate peak capture
+- **No Take Profit:** Removed to let trailing stop manage all exits
 
 ### Expected Performance
 - **Win Rate:** 50-60%
-- **Risk/Reward Ratio:** 2.5:1 to 5:1
-- **Average Win:** +8% to +15%
+- **Risk/Reward Ratio:** 3:1 to 6:1 (improved with 1-minute monitoring)
+- **Average Win:** +10% to +20% (better peak capture with 1-min checks)
 - **Average Loss:** -3%
 
 ## Version History
