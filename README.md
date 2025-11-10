@@ -28,13 +28,21 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
   - Detailed trade alerts with entry price, indicators, and P&L
   - Cycle summaries with market health and buy signals
   - Heartbeat messages every 6 cycles
+- **Interactive Telegram Commands:**
+  - `/logs [minutes]` - Get recent logs on-demand (1-60 minutes, default 1)
+  - `/status` - Get instant position snapshot with real-time P&L
+  - `/help` - Show available commands
+  - Chat ID verification for security
 - **Performance Metrics:** Tracks API success rates, execution times, and uptime
 
 ### Reliability
 - **Graceful Shutdown:** SIGTERM/SIGINT handlers with proper cleanup
 - **Environment Validation:** Checks all required API keys at startup
 - **Retry Logic:** Automatic retries with exponential backoff for API failures
-- **Persistent Logging:** Winston-based structured logging to file and console
+- **Persistent Logging:** Winston-based structured logging with automatic rotation
+  - Daily log files with 10MB max size
+  - 7-day retention policy (auto-delete old logs)
+  - Prevents unbounded log file growth
 - **Process Management:** PM2 integration with automatic restarts
 
 ## Architecture
@@ -197,7 +205,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 - **Stateful Golden Cross Detection** - Eliminated missed opportunities by tracking state across cycles
 - **Enhanced Log Formatting** - Cleaner, more readable logs with absolute dollar values
 - **Complete Targets Visibility** - Shows distances to both new highs and trailing stops
-- **Fixed Telegram Attachments** - Properly extracts plain text logs for cycle summaries
+- **Interactive Telegram Commands** - On-demand logs and status via `/logs`, `/status`, `/help`
+- **Automatic Log Rotation** - Daily rotation with 7-day retention, prevents unbounded growth
 - **8 Decimal Precision** - Better visibility for low-price tokens like BONK
 
 ## Disclaimer
