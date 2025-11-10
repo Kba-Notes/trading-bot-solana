@@ -155,8 +155,8 @@ async function checkOpenPositions() {
             // Trail 3% below highest price (balanced for meme coin volatility with 1-min checks)
             const trailingStopPrice = position.highestPrice * 0.97;
 
-            // Log trailing stop status (removed High, kept only Trail Stop and Current)
-            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}`);
+            // Log trailing stop status with current highest price
+            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}, Highest=$${position.highestPrice.toFixed(decimals)}`);
 
             // Show distance to move trailing up (how much price needs to rise to beat current high)
             const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
