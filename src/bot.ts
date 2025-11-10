@@ -6,6 +6,7 @@ import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from '
 import { runStrategy } from './strategy_analyzer/logic.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
 import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
+import { initializeCommandHandlers } from './notifier/commandHandler.js';
 import { loadAssetStates, resetState } from './state/assetStates.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
@@ -295,7 +296,10 @@ async function main() {
         // Load asset states (previous BULLISH/BEARISH states)
         loadAssetStates();
 
-        sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.');
+        // Initialize Telegram command handlers
+        initializeCommandHandlers();
+
+        sendMessage('✅ **Bot Started v2 (with Market Filter)**\nThe bot is online and running.\n\nType `/help` for available commands.');
 
         // Start position monitoring loop in background
         positionMonitoringLoop().catch(error => {

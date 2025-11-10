@@ -38,8 +38,9 @@ const chatId = process.env.TELEGRAM_CHAT_ID;
 let bot: TelegramBot | null = null;
 
 if (token && chatId) {
-    bot = new TelegramBot(token);
-    logger.info('Telegram bot initialized successfully.');
+    // Enable polling to receive messages
+    bot = new TelegramBot(token, { polling: true });
+    logger.info('Telegram bot initialized successfully with polling enabled.');
 } else {
     logger.warn('Telegram credentials not found. Notifier will be disabled.');
 }
