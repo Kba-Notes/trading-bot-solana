@@ -52,7 +52,9 @@ async function extractCycleLogs(): Promise<string | null> {
     }
 
     try {
-        const logFilePath = path.join(process.cwd(), 'trading-bot.log');
+        // Get today's log file with date pattern
+        const today = new Date().toISOString().split('T')[0];
+        const logFilePath = path.join(process.cwd(), `trading-bot-${today}.log`);
         const tempLogPath = path.join(process.cwd(), 'temp-cycle-log.txt');
 
         // Read the log file
@@ -126,7 +128,9 @@ async function extractOperationLogs(operationType: string, assetName: string): P
     }
 
     try {
-        const logFilePath = path.join(process.cwd(), 'trading-bot.log');
+        // Get today's log file with date pattern
+        const today = new Date().toISOString().split('T')[0];
+        const logFilePath = path.join(process.cwd(), `trading-bot-${today}.log`);
         const tempLogPath = path.join(process.cwd(), `temp-${operationType}-${assetName}-log.txt`);
 
         // Read the log file

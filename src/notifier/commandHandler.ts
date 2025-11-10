@@ -13,7 +13,9 @@ import path from 'path';
  */
 async function extractRecentLogs(minutes: number = 1): Promise<string | null> {
     try {
-        const logFilePath = path.join(process.cwd(), 'trading-bot.log');
+        // Get today's log file with date pattern
+        const today = new Date().toISOString().split('T')[0];
+        const logFilePath = path.join(process.cwd(), `trading-bot-${today}.log`);
         const tempLogPath = path.join(process.cwd(), 'temp-recent-logs.txt');
 
         // Read the log file
