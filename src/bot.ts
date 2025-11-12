@@ -138,11 +138,9 @@ async function checkOpenPositions() {
 
         const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
 
-        // Trailing stop logic: Activate when in 1% profit (optimized for 1-min monitoring)
-        const profitThreshold = position.entryPrice * 1.01;
-
+        // Trailing stop logic: Activate as soon as price is above entry (any profit)
         // Check if we should activate trailing stop
-        if (currentPrice >= profitThreshold && !position.trailingStopActive) {
+        if (currentPrice > position.entryPrice && !position.trailingStopActive) {
             position.trailingStopActive = true;
             position.highestPrice = currentPrice;
             logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(decimals)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
@@ -185,13 +183,13 @@ async function checkOpenPositions() {
             shouldSell = true;
             sellReason = 'Stop Loss';
         } else {
-            // Log distance to activation/stop loss if not trailing yet
+            // Log distance to stop loss if not trailing yet
             if (!position.trailingStopActive) {
-                const distanceToActivation = ((profitThreshold - currentPrice) / currentPrice) * 100;
-                const distanceToActivationUSDC = profitThreshold - currentPrice;
+                const distanceToBreakeven = ((position.entryPrice - currentPrice) / currentPrice) * 100;
+                const distanceToBreakevenUSDC = position.entryPrice - currentPrice;
                 const distanceToSL = ((currentPrice - stopLossPrice) / currentPrice) * 100;
                 const distanceToSLUSDC = currentPrice - stopLossPrice;
-                logger.info(`[Targets] ${assetConfig.name}: Trailing activation=${distanceToActivation.toFixed(2)}% away ($${distanceToActivationUSDC.toFixed(decimals)}), SL=${distanceToSL.toFixed(2)}% away ($${distanceToSLUSDC.toFixed(decimals)})`);
+                logger.info(`[Targets] ${assetConfig.name}: Breakeven=${Math.abs(distanceToBreakeven).toFixed(2)}% away ($${Math.abs(distanceToBreakevenUSDC).toFixed(decimals)}), SL=${distanceToSL.toFixed(2)}% away ($${distanceToSLUSDC.toFixed(decimals)})`);
             }
         }
 
