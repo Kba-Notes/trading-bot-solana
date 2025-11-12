@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2025-11-12
+
+### Changed
+- **Immediate Trailing Stop Activation** - Trailing stop now activates as soon as price > entry (any profit)
+  - **Before:** Waited for +1% profit before activating trailing stop
+  - **After:** Activates immediately when `currentPrice > entryPrice`
+  - **Benefit:** Even small profits (0.1%-0.9%) now get protected with trailing stop
+  - **Logic consistency:** Same behavior for activation and updates (any new high)
+  - Example: Buy at $0.100, price hits $0.1003 (+0.3%) → Trailing active at $0.0973
+- **Updated [Targets] log** - For positions without trailing, now shows "Breakeven" instead of "Trailing activation"
+
 ## [2.4.0] - 2025-11-10
 
 ### Added

@@ -13,7 +13,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 ### Risk Management
 - **Dynamic Exit Strategy:**
   - Stop Loss: -3% from entry (only downside protection)
-  - Trailing Stop: Activates at +1% profit, trails 3% below highest price
+  - Trailing Stop: Activates immediately at any profit, trails 3% below highest price
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
 - **Smart Entry Filters:**
   - Trend strength: Requires minimum 0.1% SMA slope
@@ -182,11 +182,12 @@ export const assetsToTrade = [
 ### Exit Conditions
 - **Stop Loss:** Price drops to -3% from entry (only downside protection)
 - **Trailing Stop:**
-  - Activates when price reaches +1% profit (tightened from +2%)
+  - Activates immediately when price > entry (any profit)
   - Trails 3% below the highest price seen
   - Sells when price drops 3% from the highest price (not from entry)
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
+  - Example: Buy at $0.100, price hits $0.1003 (+0.3%) → Trailing activates at $0.0973
 - **No Take Profit:** Removed to let trailing stop manage all exits
 
 ### Expected Performance
@@ -199,9 +200,14 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.4.0
+**Current Version:** 2.5.0
 
-### Latest Updates (v2.4.0)
+### Latest Updates (v2.5.0)
+- **Immediate Trailing Stop Activation** - Trailing now activates at any profit (even 0.1%), not just +1%
+  - Better protection for small gains before reversal
+  - Consistent logic: activation and updates both use "any new high"
+
+### Previous Updates (v2.4.0)
 - **Stateful Golden Cross Detection** - Eliminated missed opportunities by tracking state across cycles
 - **Enhanced Log Formatting** - Cleaner, more readable logs with absolute dollar values
 - **Complete Targets Visibility** - Shows distances to both new highs and trailing stops
