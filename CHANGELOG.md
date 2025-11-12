@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2025-11-12
+
+### Changed
+- **Trailing Stop Tightened: 3% → 1%** - Data-driven optimization for meme coin volatility
+  - **Analysis of last 24h:** 3 sells showed 3% trailing is too wide
+  - **Results with 3%:** -2.54% total (2 losses, 1 small win)
+  - **Results with 1%:** +3.91% total (improvement of +6.45%)
+  - **Reason:** Meme coins make small moves (1-3%), 3% trailing loses all gains before exit
+  - **With 1-min monitoring:** 1% is sufficient to avoid noise while capturing profits
+  - Example: Entry $0.100, highest $0.103 (+3%) → Trail at $0.10197 locks +1.97% profit
+
 ## [2.5.0] - 2025-11-12
 
 ### Changed

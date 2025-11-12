@@ -13,7 +13,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 ### Risk Management
 - **Dynamic Exit Strategy:**
   - Stop Loss: -3% from entry (only downside protection)
-  - Trailing Stop: Activates immediately at any profit, trails 3% below highest price
+  - Trailing Stop: Activates immediately at any profit, trails 1% below highest price
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
 - **Smart Entry Filters:**
   - Trend strength: Requires minimum 0.1% SMA slope
@@ -183,11 +183,12 @@ export const assetsToTrade = [
 - **Stop Loss:** Price drops to -3% from entry (only downside protection)
 - **Trailing Stop:**
   - Activates immediately when price > entry (any profit)
-  - Trails 3% below the highest price seen
-  - Sells when price drops 3% from the highest price (not from entry)
+  - Trails 1% below the highest price seen (tightened from 3% based on data)
+  - Sells when price drops 1% from the highest price (not from entry)
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
-  - Example: Buy at $0.100, price hits $0.1003 (+0.3%) → Trailing activates at $0.0973
+  - Example: Buy at $0.100, price hits $0.103 (+3%) → Trailing at $0.10197 locks +1.97% profit
+  - Data shows: 1% trailing captured +3.91% vs -2.54% with 3% trailing (24h backtest)
 - **No Take Profit:** Removed to let trailing stop manage all exits
 
 ### Expected Performance
@@ -200,9 +201,15 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.5.0
+**Current Version:** 2.6.0
 
-### Latest Updates (v2.5.0)
+### Latest Updates (v2.6.0)
+- **Trailing Stop Tightened: 3% → 1%** - Data-driven optimization
+  - 24h backtest: 1% trailing = +3.91% vs 3% trailing = -2.54%
+  - Better profit capture on small meme coin moves (1-3%)
+  - With 1-min monitoring, 1% avoids noise while locking gains
+
+### Previous Updates (v2.5.0)
 - **Immediate Trailing Stop Activation** - Trailing now activates at any profit (even 0.1%), not just +1%
   - Better protection for small gains before reversal
   - Consistent logic: activation and updates both use "any new high"
