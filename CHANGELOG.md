@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2025-11-12
+
+### Changed
+- **Stop Loss Tightened: 3% → 1%** - Consistent risk management with trailing stop
+  - **Before:** -3% stop loss, -1% trailing stop (inconsistent)
+  - **After:** -1% stop loss, -1% trailing stop (consistent)
+  - **Rationale:** If -1% trailing is optimal for protecting profits, -1% stop loss should be optimal for limiting losses
+  - **Trade-off:** Tighter stop may increase false stops, but provides consistent risk management
+  - Average loss reduced from -3% to -1%
+
 ## [2.7.0] - 2025-11-12
 
 ### Changed

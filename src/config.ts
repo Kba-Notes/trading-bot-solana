@@ -46,7 +46,7 @@ export const strategyConfig = {
     historicalDataLimit: 100,
     tradeAmountUSDC: 500,
     takeProfitPercentage: 0.08,    // DEPRECATED: No longer used (trailing stop activates before TP can be reached)
-    stopLossPercentage: 0.03,      // 3% stop loss to reduce false stops
+    stopLossPercentage: 0.01,      // 1% stop loss (consistent with 1% trailing stop)
     // Strategy-specific parameters
     shortSMAPeriod: 12,
     longSMAPeriod: 26,

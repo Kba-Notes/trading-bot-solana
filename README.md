@@ -12,7 +12,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Risk Management
 - **Dynamic Exit Strategy:**
-  - Stop Loss: -3% from entry (only downside protection)
+  - Stop Loss: -1% from entry (consistent tight risk management)
   - Trailing Stop: Activates immediately at any profit, trails 1% below highest price
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
 - **Smart Entry Filters:**
@@ -96,7 +96,7 @@ Configure trading behavior in `src/config.ts`:
 export const strategyConfig = {
     timeframe: '1h',                // 1-hour candles for faster signals
     tradeAmountUSDC: 500,           // Amount per trade
-    stopLossPercentage: 0.03,       // 3% stop loss from entry
+    stopLossPercentage: 0.01,       // 1% stop loss from entry
     shortSMAPeriod: 12,             // Fast moving average
     longSMAPeriod: 26,              // Slow moving average
     rsiPeriod: 14,
@@ -180,7 +180,7 @@ export const assetsToTrade = [
 5. **Low Volatility** - Average volatility < 5% (avoids choppy markets)
 
 ### Exit Conditions
-- **Stop Loss:** Price drops to -3% from entry (only downside protection)
+- **Stop Loss:** Price drops to -1% from entry (consistent with trailing stop)
 - **Trailing Stop:**
   - Activates immediately when price > entry (any profit)
   - Trails 1% below the highest price seen (tightened from 3% based on data)
@@ -195,15 +195,21 @@ export const assetsToTrade = [
 - **Win Rate:** 50-60%
 - **Risk/Reward Ratio:** 3:1 to 6:1 (improved with 1-minute monitoring)
 - **Average Win:** +10% to +20% (better peak capture with 1-min checks)
-- **Average Loss:** -3%
+- **Average Loss:** -1%
 
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.7.0
+**Current Version:** 2.7.1
 
-### Latest Updates (v2.7.0)
+### Latest Updates (v2.7.1)
+- **Stop Loss: 3% → 1%** - Consistent risk management
+  - Stop loss and trailing stop now both at -1%
+  - Coherent risk strategy across all exit conditions
+  - Average loss reduced from -3% to -1%
+
+### Previous Updates (v2.7.0)
 - **Analysis Cycle: 60 min → 15 min** - 4x faster buy detection
   - Main analysis now runs every 15 minutes (96 checks/day)
   - Catches Golden Cross signals within 15 minutes vs up to 1 hour
