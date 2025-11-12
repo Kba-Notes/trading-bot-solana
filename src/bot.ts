@@ -154,15 +154,18 @@ async function checkOpenPositions() {
             // Trail 3% below highest price (balanced for meme coin volatility with 1-min checks)
             const trailingStopPrice = position.highestPrice * 0.97;
 
-            // Log trailing stop status with current highest price
-            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}, Highest=$${position.highestPrice.toFixed(decimals)}`);
+            // Calculate potential P&L if trailing stop is hit
+            const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
+            const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
+            const pnlSign = potentialPnlPercent >= 0 ? '+' : '';
+
+            // Log trailing stop status with potential P&L and highest price
+            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
 
             // Show distance to move trailing up (how much price needs to rise to beat current high)
             const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
-            const distanceToNewHighUSDC = position.highestPrice - currentPrice;
             const distanceToTrailingStop = ((currentPrice - trailingStopPrice) / currentPrice) * 100;
-            const distanceToTrailingStopUSDC = currentPrice - trailingStopPrice;
-            logger.info(`[Targets] ${assetConfig.name}: New high=${distanceToNewHigh.toFixed(2)}% away ($${distanceToNewHighUSDC.toFixed(decimals)}), Trail hit=${distanceToTrailingStop.toFixed(2)}% away ($${distanceToTrailingStopUSDC.toFixed(decimals)})`);
+            logger.info(`[Targets] ${assetConfig.name}: New high=${distanceToNewHigh.toFixed(2)}% away, Trail hit=${distanceToTrailingStop.toFixed(2)}% away`);
 
             if (currentPrice < trailingStopPrice) {
                 logger.info(`🎯 Trailing stop hit for ${assetConfig.name}! Trail Stop: $${trailingStopPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
@@ -186,10 +189,8 @@ async function checkOpenPositions() {
             // Log distance to stop loss if not trailing yet
             if (!position.trailingStopActive) {
                 const distanceToBreakeven = ((position.entryPrice - currentPrice) / currentPrice) * 100;
-                const distanceToBreakevenUSDC = position.entryPrice - currentPrice;
                 const distanceToSL = ((currentPrice - stopLossPrice) / currentPrice) * 100;
-                const distanceToSLUSDC = currentPrice - stopLossPrice;
-                logger.info(`[Targets] ${assetConfig.name}: Breakeven=${Math.abs(distanceToBreakeven).toFixed(2)}% away ($${Math.abs(distanceToBreakevenUSDC).toFixed(decimals)}), SL=${distanceToSL.toFixed(2)}% away ($${distanceToSLUSDC.toFixed(decimals)})`);
+                logger.info(`[Targets] ${assetConfig.name}: Breakeven=${Math.abs(distanceToBreakeven).toFixed(2)}% away, SL=${distanceToSL.toFixed(2)}% away`);
             }
         }
 
