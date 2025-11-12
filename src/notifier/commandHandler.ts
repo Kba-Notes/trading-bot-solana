@@ -82,14 +82,17 @@ async function getPositionsStatus(): Promise<string> {
         const currentPrice = await getCurrentPrice(position.asset);
         if (!currentPrice) continue;
 
+        // Determine decimal places based on price magnitude (same as logs)
+        const decimals = currentPrice < 0.01 ? 8 : 6;
+
         const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
         const pnlUSDC = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
         const pnlSign = pnlPercent >= 0 ? '+' : '';
         const pnlEmoji = pnlPercent >= 0 ? '🟢' : '🔴';
 
         status += `${pnlEmoji} *${assetName}*\n`;
-        status += `  Entry: \`$${position.entryPrice.toFixed(6)}\`\n`;
-        status += `  Current: \`$${currentPrice.toFixed(6)}\`\n`;
+        status += `  Entry: \`$${position.entryPrice.toFixed(decimals)}\`\n`;
+        status += `  Current: \`$${currentPrice.toFixed(decimals)}\`\n`;
         status += `  P&L: \`${pnlSign}${pnlPercent.toFixed(2)}%\` (${pnlSign}$${pnlUSDC.toFixed(2)})\n`;
 
         if (position.trailingStopActive && position.highestPrice) {
@@ -98,9 +101,9 @@ async function getPositionsStatus(): Promise<string> {
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(6)}\`\n`;
+            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(decimals)}\`\n`;
             status += `  💰 Potential P&L: \`${potentialPnlSign}${potentialPnlPercent.toFixed(2)}%\` (${potentialPnlSign}$${potentialPnlUSDC.toFixed(2)})\n`;
-            status += `  📈 Highest: \`$${position.highestPrice.toFixed(6)}\`\n`;
+            status += `  📈 Highest: \`$${position.highestPrice.toFixed(decimals)}\`\n`;
         }
 
         status += '\n';
