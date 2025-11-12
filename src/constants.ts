@@ -15,6 +15,9 @@ export const API_DELAYS = {
 
     /** Delay between Birdeye API calls to avoid rate limits (free tier) */
     BIRDEYE_API: 1500,
+
+    /** Delay between position checks to reduce RPC load (5 seconds for rate limiting) */
+    POSITION_CHECK: 5000,
 } as const;
 
 // Bot Behavior
@@ -57,10 +60,10 @@ export const SOLANA_CONSTANTS = {
 export const RETRY_CONFIG = {
     /** Maximum number of retry attempts for API calls */
     MAX_RETRIES: 3,
-    
-    /** Base delay for exponential backoff (ms) */
-    BASE_DELAY: 1000,
-    
-    /** Maximum delay cap for exponential backoff (ms) */
-    MAX_DELAY: 10000,
+
+    /** Base delay for exponential backoff (ms) - increased for rate limiting */
+    BASE_DELAY: 5000,
+
+    /** Maximum delay cap for exponential backoff (ms) - increased for rate limiting */
+    MAX_DELAY: 30000,
 } as const;

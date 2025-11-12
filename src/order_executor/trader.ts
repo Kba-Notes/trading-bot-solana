@@ -194,7 +194,8 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
  */
 export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number, retryCount: number = 0): Promise<boolean> {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+    // Exponential backoff: 5s, 10s, 20s (capped at 30s)
+    const getRetryDelay = (attempt: number) => Math.min(5000 * Math.pow(2, attempt), 30000);
 
     // Validate inputs
     validateSolanaAddress(assetMint, 'assetMint');
@@ -254,8 +255,9 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
     } else {
         // Swap failed - retry if attempts remaining
         if (retryCount < MAX_RETRIES) {
-            logger.warn(`❌ Buy attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            const retryDelay = getRetryDelay(retryCount);
+            logger.warn(`❌ Buy attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${retryDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
             return await executeBuyOrder(assetMint, amountUSDC, price, retryCount + 1);
         } else {
             logger.error(`❌ All ${MAX_RETRIES + 1} buy attempts failed for ${assetName}.`);
@@ -282,7 +284,8 @@ async function getTokenBalance(wallet: Keypair, connection: Connection, mint: Pu
  */
 export async function executeSellOrder(position: OpenPosition, retryCount: number = 0): Promise<boolean> {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 5000; // 5 seconds between retries
+    // Exponential backoff: 5s, 10s, 20s (capped at 30s)
+    const getRetryDelay = (attempt: number) => Math.min(5000 * Math.pow(2, attempt), 30000);
 
     // Mark operation start for log extraction (only on first attempt)
     if (retryCount === 0) {
@@ -348,8 +351,9 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
         } else {
             // Swap failed - retry if attempts remaining
             if (retryCount < MAX_RETRIES) {
-                logger.warn(`❌ Sell attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+                const retryDelay = getRetryDelay(retryCount);
+                logger.warn(`❌ Sell attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${retryDelay / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
                 return await executeSellOrder(position, retryCount + 1);
             } else {
                 logger.error(`❌ All ${MAX_RETRIES + 1} sell attempts failed for ${assetName}. Position remains open.`);
@@ -362,8 +366,9 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
 
         // Retry on critical errors too
         if (retryCount < MAX_RETRIES) {
-            logger.warn(`Retrying after critical error (${retryCount + 1}/${MAX_RETRIES})...`);
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            const retryDelay = getRetryDelay(retryCount);
+            logger.warn(`Retrying after critical error (${retryCount + 1}/${MAX_RETRIES}) in ${retryDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
             return await executeSellOrder(position, retryCount + 1);
         }
 

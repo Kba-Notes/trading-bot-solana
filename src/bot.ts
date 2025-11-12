@@ -199,7 +199,9 @@ async function checkOpenPositions() {
             // Reset state to BEARISH after selling
             resetState(position.asset);
         }
-        await sleep(API_DELAYS.RATE_LIMIT);
+
+        // Add delay between position checks to reduce RPC load
+        await sleep(API_DELAYS.POSITION_CHECK);
     }
 }
 
