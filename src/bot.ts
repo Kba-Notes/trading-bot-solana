@@ -8,6 +8,7 @@ import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader }
 import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
 import { initializeCommandHandlers } from './notifier/commandHandler.js';
 import { loadAssetStates, resetState } from './state/assetStates.js';
+import { savePositions } from './persistence/positions.js';
 import { SMA } from 'technicalindicators';
 import axios from 'axios';
 import { sleep, executeWithTiming } from './utils/async.js';
@@ -144,12 +145,20 @@ async function checkOpenPositions() {
             position.trailingStopActive = true;
             position.highestPrice = currentPrice;
             logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(decimals)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
+            // Persist the updated position state
+            await savePositions(getOpenPositions());
         }
 
         // If trailing stop is active, monitor it regardless of current price level
         if (position.trailingStopActive) {
             // Update highest price if current is higher
-            position.highestPrice = Math.max(position.highestPrice || currentPrice, currentPrice);
+            const previousHighest = position.highestPrice || currentPrice;
+            position.highestPrice = Math.max(previousHighest, currentPrice);
+
+            // Persist if highest price was updated
+            if (position.highestPrice > previousHighest) {
+                await savePositions(getOpenPositions());
+            }
 
             // Trail 1% below highest price (optimized for meme coin volatility with 1-min checks)
             const trailingStopPrice = position.highestPrice * 0.99;
