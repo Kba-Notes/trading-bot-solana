@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2025-11-12
+
+### Changed
+- **Analysis Cycle Frequency: 60 min → 15 min** - More dynamic buy detection (4x faster)
+  - **Before:** 1 hour cycles = 24 checks/day
+  - **After:** 15 minute cycles = 96 checks/day
+  - **Benefit:** Catches Golden Cross signals within 15 minutes instead of waiting up to 1 hour
+  - **Rationale:** Meme coins can move fast, faster entry timing improves profit capture
+  - Position monitoring unchanged: Still every 1 minute for accurate trailing stop execution
+
 ## [2.6.0] - 2025-11-12
 
 ### Changed

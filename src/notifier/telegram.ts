@@ -335,7 +335,7 @@ ${healthIcon} *Market Health:* \`${update.marketHealth.toFixed(2)}%\`
 📈 *Buy Signals:* \`${update.buySignals}\`
 💼 *Open Positions:* \`${update.openPositions}\`
 
-_Next analysis in 1 hour..._
+_Next analysis in 15 minutes..._
 `;
 
     // Send the summary message

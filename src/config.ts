@@ -58,5 +58,5 @@ export const strategyConfig = {
     requireRsiConfirmation: false,  // Set to true for more conservative entries
 };
 
-export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;        // 1 hour - main analysis cycle (24 checks/day)
-export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;            // 1 minute - position monitoring (increased from 15 min for better trailing stop capture)
+export const BOT_EXECUTION_INTERVAL = 15 * 60 * 1000;        // 15 minutes - main analysis cycle (96 checks/day)
+export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;           // 1 minute - position monitoring (increased from 15 min for better trailing stop capture)

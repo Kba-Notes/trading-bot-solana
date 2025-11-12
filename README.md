@@ -22,7 +22,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Monitoring & Alerts
 - **Dual-Speed Monitoring:**
-  - Main analysis cycle: Every 1 hour (finds new opportunities) - 24 checks/day
+  - Main analysis cycle: Every 15 minutes (finds new opportunities) - 96 checks/day
   - Position monitoring: Every 1 minute (real-time TP/SL execution) - 1,440 checks/day
 - **Enhanced Telegram Notifications:**
   - Detailed trade alerts with entry price, indicators, and P&L
@@ -105,8 +105,8 @@ export const strategyConfig = {
 };
 
 // Monitoring intervals
-export const BOT_EXECUTION_INTERVAL = 1 * 60 * 60 * 1000;   // 1 hour (24 checks/day)
-export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;       // 1 minute (1,440 checks/day)
+export const BOT_EXECUTION_INTERVAL = 15 * 60 * 1000;   // 15 minutes (96 checks/day)
+export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;   // 1 minute (1,440 checks/day)
 ```
 
 ### Tradeable Assets
@@ -201,9 +201,16 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.6.0
+**Current Version:** 2.7.0
 
-### Latest Updates (v2.6.0)
+### Latest Updates (v2.7.0)
+- **Analysis Cycle: 60 min → 15 min** - 4x faster buy detection
+  - Main analysis now runs every 15 minutes (96 checks/day)
+  - Catches Golden Cross signals within 15 minutes vs up to 1 hour
+  - Better entry timing for fast-moving meme coins
+  - Position monitoring still at 1 minute for accurate trailing stops
+
+### Previous Updates (v2.6.0)
 - **Trailing Stop Tightened: 3% → 1%** - Data-driven optimization
   - 24h backtest: 1% trailing = +3.91% vs 3% trailing = -2.54%
   - Better profit capture on small meme coin moves (1-3%)
