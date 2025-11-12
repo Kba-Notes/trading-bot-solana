@@ -151,8 +151,8 @@ async function checkOpenPositions() {
             // Update highest price if current is higher
             position.highestPrice = Math.max(position.highestPrice || currentPrice, currentPrice);
 
-            // Trail 3% below highest price (balanced for meme coin volatility with 1-min checks)
-            const trailingStopPrice = position.highestPrice * 0.97;
+            // Trail 1% below highest price (optimized for meme coin volatility with 1-min checks)
+            const trailingStopPrice = position.highestPrice * 0.99;
 
             // Calculate potential P&L if trailing stop is hit
             const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;

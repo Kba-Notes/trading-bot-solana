@@ -96,7 +96,7 @@ async function getPositionsStatus(): Promise<string> {
         status += `  P&L: \`${pnlSign}${pnlPercent.toFixed(2)}%\` (${pnlSign}$${pnlUSDC.toFixed(2)})\n`;
 
         if (position.trailingStopActive && position.highestPrice) {
-            const trailingStopPrice = position.highestPrice * 0.97;
+            const trailingStopPrice = position.highestPrice * 0.99;
             const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
