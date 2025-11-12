@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Benefit:** Even small profits (0.1%-0.9%) now get protected with trailing stop
   - **Logic consistency:** Same behavior for activation and updates (any new high)
   - Example: Buy at $0.100, price hits $0.1003 (+0.3%) → Trailing active at $0.0973
+- **Polished Position Monitoring Logs** - Cleaner, more actionable position information
+  - **[Trailing Stop] line:** Removed redundant "Current" price, added potential P&L if trailing stop is hit
+  - **[Targets] line:** Removed dollar amounts, kept only distance percentages
+  - Shows immediate risk/reward: current P&L vs protected P&L at trailing stop
+  - Example: `[Trailing Stop] JUP: Trail Stop=$0.339650, P&L=-2.34% ($-11.72), Highest=$0.350155`
 - **Updated [Targets] log** - For positions without trailing, now shows "Breakeven" instead of "Trailing activation"
 
 ## [2.4.0] - 2025-11-10

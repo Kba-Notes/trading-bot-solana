@@ -206,6 +206,9 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 - **Immediate Trailing Stop Activation** - Trailing now activates at any profit (even 0.1%), not just +1%
   - Better protection for small gains before reversal
   - Consistent logic: activation and updates both use "any new high"
+- **Polished Position Logs** - Cleaner, more actionable monitoring information
+  - Shows potential P&L if trailing stop is hit (risk/reward visibility)
+  - Removed redundant prices and dollar amounts for clarity
 
 ### Previous Updates (v2.4.0)
 - **Stateful Golden Cross Detection** - Eliminated missed opportunities by tracking state across cycles
