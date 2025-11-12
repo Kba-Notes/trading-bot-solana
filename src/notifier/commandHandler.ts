@@ -94,7 +94,12 @@ async function getPositionsStatus(): Promise<string> {
 
         if (position.trailingStopActive && position.highestPrice) {
             const trailingStopPrice = position.highestPrice * 0.97;
+            const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
+            const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
+            const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
+
             status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(6)}\`\n`;
+            status += `  💰 Potential P&L: \`${potentialPnlSign}${potentialPnlPercent.toFixed(2)}%\` (${potentialPnlSign}$${potentialPnlUSDC.toFixed(2)})\n`;
             status += `  📈 Highest: \`$${position.highestPrice.toFixed(6)}\`\n`;
         }
 

@@ -160,7 +160,7 @@ async function checkOpenPositions() {
             const pnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
             // Log trailing stop status with potential P&L and highest price
-            logger.info(`[Trailing Stop] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
+            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
 
             // Show distance to move trailing up (how much price needs to rise to beat current high)
             const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
