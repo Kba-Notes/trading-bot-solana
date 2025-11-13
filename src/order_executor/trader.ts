@@ -292,6 +292,15 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
         markOperationStart();
     }
 
+    // Check if position still exists (prevents duplicate sells from concurrent loops)
+    const positionExists = openPositions.some(p => p.id === position.id);
+    if (!positionExists) {
+        const assetConfig = assetsToTrade.find(a => a.mint === position.asset);
+        const assetName = assetConfig?.name || position.asset;
+        logger.warn(`Position ${position.id} for ${assetName} no longer exists. Already sold by another process.`);
+        return true; // Consider this a success - position is already closed
+    }
+
     // Validate position data
     validateSolanaAddress(position.asset, 'position.asset');
     validatePrice(position.entryPrice, 'position.entryPrice');
