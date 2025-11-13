@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] - 2025-11-13
+
+### Changed
+- **Improved Log Clarity** - Cleaner, less redundant analysis logs
+  - Removed `[STATE]` line with truncated asset address and duplicate SMA/RSI values
+  - Reordered logs: Asset name now appears first (not after technical data)
+  - Golden Cross message only appears when transition actually occurs
+  - Eliminated "Previous: BEARISH | Current: BEARISH" redundancy
+  - **Before:** 4 lines with duplicate data and confusing order
+  - **After:** 3 lines in logical order (Asset → Golden Cross if any → Technical Data → Decision)
+
+### Fixed
+- **Race Condition in Sell Orders** - Prevented duplicate sells from concurrent loops
+  - Fixed bug where position monitor loop and main analysis cycle could both trigger sell
+  - Added position existence check before executing sell orders
+  - Prevents delayed retries from selling wrong positions after new buy
+  - Ghost positions from failed sells now properly handled
+
 ## [2.7.1] - 2025-11-12
 
 ### Changed

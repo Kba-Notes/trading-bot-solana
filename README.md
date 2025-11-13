@@ -201,9 +201,19 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.7.1
+**Current Version:** 2.7.2
 
-### Latest Updates (v2.7.1)
+### Latest Updates (v2.7.2)
+- **Improved Log Clarity** - Cleaner analysis logs with less redundancy
+  - Asset name shown first (not truncated address)
+  - Removed duplicate SMA/RSI data
+  - Golden Cross only logged when it actually occurs
+  - Better log organization and readability
+- **Race Condition Fix** - Prevented duplicate sell attempts from concurrent loops
+  - Fixes ghost positions from failed sell retries
+  - Position existence check before sell execution
+
+### Previous Updates (v2.7.1)
 - **Stop Loss: 3% → 1%** - Consistent risk management
   - Stop loss and trailing stop now both at -1%
   - Coherent risk strategy across all exit conditions
