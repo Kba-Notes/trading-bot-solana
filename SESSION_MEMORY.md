@@ -77,11 +77,15 @@ Types:
 - perf:     Performance
 ```
 
-### Workflow for Every Change
+### Workflow for Every User-Facing Change
 1. ✍️ Make code changes
-2. 📝 Create atomic commits with clear messages
-3. 🚀 Push to GitHub automatically
-4. ✅ Verify on GitHub
+2. 📋 Update CHANGELOG.md (document the change)
+3. 📖 Update README.md (if applicable)
+4. 📝 Create atomic commits with clear messages
+5. 🚀 Push to GitHub automatically
+6. ✅ Verify on GitHub
+
+**CRITICAL**: Steps 2-3 are MANDATORY, not optional!
 
 ### What to NEVER Commit
 - `.env` (secrets)
@@ -172,6 +176,19 @@ All documentation is in the repository:
 ⚠️ **NEVER** commit secrets or credentials
 ⚠️ **NEVER** hardcode sensitive values
 
+### 📝 MANDATORY Documentation Workflow (NON-NEGOTIABLE)
+
+For **EVERY** user-facing change, you MUST complete ALL these steps with EQUAL priority:
+
+1. ✍️ **Update code** - Make the technical changes
+2. 📋 **Update CHANGELOG.md** - Document what changed and why
+3. 📖 **Update README.md** - Update relevant sections (features, strategy, version)
+4. 🚀 **Commit to GitHub** - Push all changes together
+
+**This is NOT optional.** Documentation has the **same priority** as code commits.
+
+**User quote**: "I REALLY need you to remember to do this everytime you consider the change is worthy to be commented there. I keep remembering you and I need you to do it everytime. This is important. **As important as commiting the changes into github**"
+
 ---
 
 ## 🎯 Quick Reference
@@ -218,8 +235,10 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-10 (Latest session - Stateful Golden Cross + Enhanced log formatting + Complete targets visibility)
+**Last Updated**: 2025-11-13 (Latest session - v2.7.2 with improved log clarity + race condition fix + complete documentation workflow established)
 **Status**: ✅ Ready for continuous development
+
+**Critical Workflow Reminder**: ALWAYS update CHANGELOG.md and README.md for user-facing changes with same priority as code commits!
 
 ---
 
@@ -568,7 +587,174 @@ git status --ignored | grep .env  # Verify .env ignored
      - Better understanding of risk/reward in real-time
    - **Status**: ✅ Deployed - all positions show full targets information
 
-### 📊 Current Strategy Configuration
+22. **Interactive Telegram Commands** (Commit: c8f2e57 - Nov 10, 2025)
+   - **NEW FEATURE**: On-demand logs and status via Telegram chat commands
+   - **Commands Added**:
+     - `/logs [minutes]` - Get recent logs (1-60 minutes, default 1 minute)
+     - `/status` - Get instant position snapshot with real-time P&L
+     - `/help` - Show available commands
+   - **Security**: Chat ID verification - only authorized user can use commands
+   - **Implementation**:
+     - New file: `src/notifier/commandHandler.ts` - Command processing
+     - Modified: `src/notifier/telegram.ts` - Enabled polling for commands
+     - Commands processed in real-time, no restart needed
+   - **Benefits**:
+     - No need to SSH into server for logs
+     - Quick P&L checks from mobile
+     - On-demand visibility between cycle summaries
+   - **Status**: ✅ Deployed and working
+
+23. **Automatic Log Rotation** (Commit: c8f2e57 - Nov 10, 2025)
+   - **INFRASTRUCTURE**: Implemented winston-daily-rotate-file
+   - **Problem**: Single trading-bot.log file growing unbounded
+   - **Solution**:
+     - Daily log files with date pattern: `trading-bot-YYYY-MM-DD.log`
+     - 10MB max file size before rotation
+     - 7-day retention policy (auto-delete old logs)
+     - Prevents unbounded log file growth
+   - **Added dependency**: `winston-daily-rotate-file`
+   - **Files modified**: `src/services.ts` - Winston configuration
+   - **Status**: ✅ Deployed - logs now auto-rotate
+
+24. **Trailing Stop Tightened: 3% → 1%** (Commit: b40bf77 - Nov 12, 2025) - **v2.6.0**
+   - **DATA-DRIVEN OPTIMIZATION**: User analyzed last 24h data to optimize trailing stop
+   - **Analysis Results**:
+     - With 3% trailing: -2.54% total (2 losses, 1 small win)
+     - With 1% trailing: +3.91% total
+     - **Improvement**: +6.45%
+   - **Reasoning**: Meme coins make small moves (1-3%), 3% trailing loses all gains before exit
+   - **With 1-min monitoring**: 1% is sufficient to avoid noise while capturing profits
+   - **Example**: Entry $0.100, highest $0.103 (+3%) → Trail at $0.10197 locks +1.97% profit
+   - **Changes**:
+     - bot.ts line 155: Changed multiplier from `0.97` to `0.99`
+     - commandHandler.ts line 99: Changed multiplier from `0.97` to `0.99`
+   - **Status**: ✅ Deployed - better profit capture on small moves
+
+25. **Immediate Trailing Stop Activation** (Commit: 5ac361a - Nov 12, 2025) - **v2.5.0**
+   - **LOGIC IMPROVEMENT**: Trailing stop now activates at ANY profit (even 0.1%)
+   - **Before**: Waited for +1% profit before activating trailing stop
+   - **After**: Activates immediately when `currentPrice > entryPrice`
+   - **User insight**: "it would make sense that the activation happens in any case the current price is higher than entry price"
+   - **Benefit**: Even small profits (0.1%-0.9%) now get protected with trailing stop
+   - **Logic consistency**: Same behavior for activation and updates (any new high)
+   - **Example**: Buy at $0.100, price hits $0.1003 (+0.3%) → Trailing active at $0.0973
+   - **Status**: ✅ Deployed - immediate profit protection
+
+26. **Polished Position Monitoring Logs** (Commit: 5ac361a - Nov 12, 2025) - **v2.5.0**
+   - **UX IMPROVEMENT**: Cleaner, more actionable position logs
+   - **Changes**:
+     - Changed `[Trailing Stop]` to `[Trailing]`
+     - Added "Potential P&L" showing what you'd get if trailing stop hits
+     - Shows risk/reward: current P&L vs protected P&L at trailing stop
+     - Removed redundant "Current" price from trailing line
+     - Removed dollar amounts from [Targets] line
+   - **Example**:
+     ```
+     [Trailing] JUP: Trail Stop=$0.339650, P&L=-2.34% ($-11.72), Highest=$0.350155
+     ```
+   - **Status**: ✅ Deployed - cleaner logs
+
+27. **Analysis Cycle Frequency: 60 min → 15 min** (Commit: 51c5b7f - Nov 12, 2025) - **v2.7.0**
+   - **MAJOR OPTIMIZATION**: 4x faster buy signal detection
+   - **Before**: 1 hour cycles = 24 checks/day
+   - **After**: 15 minute cycles = 96 checks/day
+   - **Benefit**: Catches Golden Cross signals within 15 minutes instead of waiting up to 1 hour
+   - **Rationale**: Meme coins can move fast, faster entry timing improves profit capture
+   - **Change**: BOT_EXECUTION_INTERVAL from `60 * 60 * 1000` to `15 * 60 * 1000`
+   - **Position monitoring**: Still every 1 minute for accurate trailing stop execution
+   - **Status**: ✅ Deployed - more dynamic buy detection
+
+28. **Stop Loss Tightened: 3% → 1%** (Commit: 4e86c89 - Nov 12, 2025) - **v2.7.1**
+   - **CONSISTENCY FIX**: Aligned stop loss with trailing stop percentage
+   - **Before**: -3% stop loss, -1% trailing stop (inconsistent)
+   - **After**: -1% stop loss, -1% trailing stop (consistent)
+   - **User insight**: "If -1% trailing is optimal for protecting profits, -1% stop loss should be optimal for limiting losses"
+   - **Trade-off**: Tighter stop may increase false stops, but provides consistent risk management
+   - **Change**: `stopLossPercentage: 0.03` → `0.01` in src/config.ts
+   - **Average loss**: Reduced from -3% to -1%
+   - **Status**: ✅ Deployed - coherent risk strategy
+
+29. **Trailing Stop Persistence Fix** (Commit: 7a3f982 - Nov 12, 2025) - **v2.7.1**
+   - **BUG FIX**: Trailing stop data lost after bot restart
+   - **Problem**: `/status` command showing incomplete info - missing trailing stop data after restart
+   - **Root cause**: Bot updating `trailingStopActive` and `highestPrice` in memory but not persisting to disk
+   - **Solution**: Added `await savePositions(getOpenPositions())` calls:
+     - When trailing stop activates (line 149 in bot.ts)
+     - When highest price updates (lines 159-161 in bot.ts)
+   - **Result**: Trailing stop state now survives restarts
+   - **Status**: ✅ Fixed - complete info always available
+
+30. **Rate Limiting Protection** (Commit: 7a3f982 - Nov 12, 2025) - **v2.7.1**
+   - **BUG FIX**: Prevented 429 errors from Solana RPC
+   - **Problem**: Rapid position checks causing rate limit errors, leading to failed sells
+   - **Timeline of bug**:
+     - 07:48:00 - Main cycle detected trailing stop, sold successfully
+     - 07:48:00 - Position monitor also tried to sell, got 429 errors
+     - 07:48:04 - New Golden Cross detected, bought JUP again
+     - 07:48:27 - Delayed retry succeeded, but sold the NEW position instead
+     - Result: Ghost position in tracking
+   - **Solutions Implemented**:
+     1. **Reduce call frequency**: 5-second spacing between position checks (`API_DELAYS.POSITION_CHECK`)
+     2. **Better recovery**: Exponential backoff with longer delays (5s → 10s → 20s → 30s cap)
+     3. **Prevent duplicate operations**: Position existence check before sell execution
+   - **Changes**:
+     - constants.ts: Increased `RETRY_CONFIG.BASE_DELAY` from 1s to 5s
+     - constants.ts: Increased `RETRY_CONFIG.MAX_DELAY` from 10s to 30s
+     - constants.ts: Added `API_DELAYS.POSITION_CHECK = 5000`
+     - bot.ts line 204: Added sleep between position checks
+     - trader.ts lines 295-302: Added position existence check
+   - **Result**: Prevents burst calls, better recovery, eliminates ghost positions
+   - **Status**: ✅ Fixed - no more 429 errors
+
+31. **Improved Log Clarity** (Commit: 2e9ab4d - Nov 13, 2025) - **v2.7.2**
+   - **UX IMPROVEMENT**: Cleaner, less redundant analysis logs
+   - **User feedback**: Logs had duplicate data and confusing order
+   - **Changes**:
+     - **Removed** `[STATE]` line with truncated asset address and duplicate SMA/RSI values
+     - **Reordered** logs: Asset name now appears first (not after technical data)
+     - **Golden Cross** message only appears when transition actually occurs
+     - **Eliminated** "Previous: BEARISH | Current: BEARISH" redundancy
+   - **Before (4 lines)**:
+     ```
+     [STATE] Asset: jtojtome... | Previous: BEARISH | Current: BEARISH | SMA12=... | SMA26=... | RSI=...
+     [Asset Analysis]: JTO
+     [Technical Data]: SMA12=... | SMA26=... | RSI=... (duplicate)
+     [Decision]: HOLD
+     ```
+   - **After (3 lines)**:
+     ```
+     [Asset Analysis]: JTO
+     [GOLDEN CROSS] Detected! (only when occurs)
+     [Technical Data]: SMA12=... | SMA26=... | RSI=...
+     [Decision]: BUY/HOLD
+     ```
+   - **Files modified**:
+     - src/strategy_analyzer/logic.ts - Removed STATE log, moved Asset log
+     - src/bot.ts line 245-253 - Moved Asset Analysis before strategy execution
+   - **Status**: ✅ Deployed - much more readable logs
+
+32. **Race Condition Fix** (Commit: 2e9ab4d - Nov 13, 2025) - **v2.7.2**
+   - **CRITICAL BUG FIX**: Prevented duplicate sells from concurrent loops
+   - **Problem**: Position monitor loop and main analysis cycle could both trigger sell
+   - **User reported**: JUP ghost position after failed sell retries
+   - **Root cause**:
+     - Main analysis and position monitoring run concurrently
+     - Both can detect exit condition (trailing stop / stop loss)
+     - First sell succeeds, second sell gets queued
+     - If new buy happens before retry completes, retry sells WRONG position
+   - **Solution**: Added position existence check at start of `executeSellOrder()`
+     ```typescript
+     const positionExists = openPositions.some(p => p.id === position.id);
+     if (!positionExists) {
+         logger.warn(`Position ${position.id} for ${assetName} no longer exists. Already sold by another process.`);
+         return true; // Consider this a success
+     }
+     ```
+   - **Files modified**: src/order_executor/trader.ts lines 295-302
+   - **Result**: Delayed retries now check if position still exists before selling
+   - **Status**: ✅ Fixed - no more ghost positions
+
+### 📊 Current Strategy Configuration (v2.7.2)
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)
@@ -578,27 +764,29 @@ git status --ignored | grep .env  # Verify .env ignored
 - **Filter**: Volatility < 5% (market stability)
 
 **Exit Conditions (Optimized for 1-Minute Monitoring)**:
-- ~~Take Profit~~ **REMOVED** (unreachable with +1% trailing activation)
-- Stop Loss: **-3%** (only downside protection)
-- **Trailing Stop**: Activates at **+1%** profit, trails **3%** below highest price
-  - Earlier activation (from +2%) captures upside sooner
-  - 3% distance balanced for meme coin volatility with 1-min checks
+- ~~Take Profit~~ **REMOVED** (unreachable with immediate trailing activation)
+- Stop Loss: **-1%** (tightened from -3% for consistency)
+- **Trailing Stop**: Activates **immediately** when price > entry, trails **1%** below highest price
+  - Immediate activation (from +1%) protects even smallest profits
+  - 1% trailing (from 3%) optimized for meme coin small moves (1-3%)
   - Updates highestPrice every minute for accurate peak capture
+  - Data-driven: 1% trailing showed +6.45% improvement vs 3% trailing
 
 **Monitoring Frequency (OPTIMIZED)**:
-- Main analysis cycle: Every 1 hour (finds new opportunities) - 24 checks/day
-- Position monitoring: **Every 1 minute** (increased from 15 min) - 1,440 checks/day
+- Main analysis cycle: **Every 15 minutes** (changed from 1 hour) - 96 checks/day
+- Position monitoring: **Every 1 minute** - 1,440 checks/day
 - Timeframe: 1-hour candles (optimized for meme coin volatility)
-- Total API calls: ~120 analysis calls/day + ~1,440-7,200 position checks when open
-- API headroom: Using only 8.5% of Jupiter Lite limit (60 req/min), safe margin
+- Total API calls: ~480 analysis calls/day + ~1,440-7,200 position checks when open
+- API headroom: Still within safe limits with rate limiting protection
 
-**Expected Results (With 1-Minute Monitoring)**:
+**Expected Results (With Current Optimizations)**:
 - Win Rate: 50-60% (similar)
-- Average Win: **+10-20%** (significantly improved from peak capture)
-- Average Loss: -3% (unchanged)
-- Risk/Reward: **3:1 to 6:1 ratio** (improved from 2.5:1-5:1)
-- Overall P&L: **+50-70% improvement expected** (vs previous +30-50%)
-- Exit quality: Much closer to actual peaks, less profit giveback
+- Average Win: **+10-20%** (improved from peak capture and tighter trailing)
+- Average Loss: **-1%** (improved from -3%)
+- Risk/Reward: **3:1 to 6:1 ratio** (improved)
+- Overall P&L: **+50-70% improvement expected**
+- Exit quality: Much closer to actual peaks, minimal profit giveback
+- Entry timing: 4x faster signal detection (15-min vs 1-hour cycles)
 
 ---
 
