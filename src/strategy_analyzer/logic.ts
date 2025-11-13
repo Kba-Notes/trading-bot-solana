@@ -84,14 +84,14 @@ export function runStrategy(
     // Step 4: Get previous state from storage
     const previousState = getPreviousState(assetMint);
 
-    logger.info(`[STATE] Asset: ${assetMint.slice(0, 8)}... | Previous: ${previousState} | Current: ${currentState} | SMA12=${sma12.toFixed(8)}, SMA26=${sma26.toFixed(8)}, RSI=${rsi14.toFixed(2)}`);
-
     // Step 5: Update state for next cycle
     updateState(assetMint, currentState);
 
     // Step 6: Check for Golden Cross (BEARISH → BULLISH transition)
     if (previousState === 'BEARISH' && currentState === 'BULLISH') {
         // Golden Cross detected!
+        logger.info(`[GOLDEN CROSS] Detected! Transition from BEARISH to BULLISH`);
+
         const isRsiOk = rsi14 > 50;
 
         if (requireRsiConfirmation && !isRsiOk) {
@@ -104,7 +104,6 @@ export function runStrategy(
             };
         }
 
-        logger.info(`[GOLDEN CROSS] Detected for ${assetMint.slice(0, 8)}! Transition from BEARISH to BULLISH`);
         return {
             decision: {
                 action: 'BUY',

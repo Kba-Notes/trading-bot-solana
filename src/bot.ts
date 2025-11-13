@@ -241,11 +241,13 @@ async function findNewOpportunities(marketHealthIndex: number) {
             continue;
         }
 
+        // Log asset name before analysis
+        logger.info(`[Asset Analysis]: ${asset.name}`);
+
         const { decision, indicators } = runStrategy(asset.mint, historicalPrices, marketHealthIndex, strategyConfig.requireRsiConfirmation);
 
         // Detailed logging
         if (indicators) {
-            logger.info(`[Asset Analysis]: ${asset.name}`);
             logger.info(`[Technical Data]: SMA12=${indicators.sma12.toFixed(8)} | SMA26=${indicators.sma26.toFixed(8)} | RSI14=${indicators.rsi14.toFixed(2)}`);
             logger.info(`[Decision]: ${decision.action}. Reason: ${decision.reason}`);
         }
