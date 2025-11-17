@@ -8,7 +8,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 - **Automated Trading:** Executes buy and sell orders on Solana DEXs without manual intervention
 - **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 1-hour timeframe
 - **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends to protect capital during bearish markets
-- **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, JTO, WIF, PENG, BONK)
+- **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
 
 ### Risk Management
 - **Dynamic Exit Strategy:**
@@ -121,9 +121,9 @@ export const assetsToTrade = [
         geckoPool: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg'
     },
     {
-        name: 'JTO',
-        mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL',
-        geckoPool: 'G2FiE1yn9N9ZJx5e1E2LxxMnHvb1H3hCuHLPfKJ98smA'
+        name: 'WIF',
+        mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+        geckoPool: 'EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx'
     },
     // Add more SPL tokens here with their GeckoTerminal pool addresses
 ];
@@ -201,9 +201,16 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.7.2
+**Current Version:** 2.7.3
 
-### Latest Updates (v2.7.2)
+### Latest Updates (v2.7.3)
+- **JTO Removed from Monitored Assets** - Portfolio optimization based on performance data
+  - JTO identified as least effective and too volatile, causing losses
+  - Bot now monitors 4 assets: JUP, WIF, PENG, BONK
+  - More focused portfolio with reduced exposure to underperforming asset
+  - Existing JTO positions continue to be monitored until exit
+
+### Previous Updates (v2.7.2)
 - **Improved Log Clarity** - Cleaner analysis logs with less redundancy
   - Asset name shown first (not truncated address)
   - Removed duplicate SMA/RSI data

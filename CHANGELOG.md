@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] - 2025-11-17
+
+### Removed
+- **JTO removed from monitored assets** - User-driven optimization based on performance data
+  - **Reason:** JTO identified as least effective and too volatile, causing losses
+  - **Result:** Bot now monitors 4 assets instead of 5 (JUP, WIF, PENG, BONK)
+  - **Existing positions:** Open JTO positions will continue to be monitored until exit
+  - **Impact:** More focused portfolio, reduced exposure to underperforming asset
+
 ## [2.7.2] - 2025-11-13
 
 ### Changed
