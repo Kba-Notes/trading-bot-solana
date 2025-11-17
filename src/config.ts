@@ -10,7 +10,7 @@ export const marketFilterConfig = {
         { name: 'SOL', id: 'solana', weight: 0.50 }
     ],
     indicatorPeriod: 20,
-    timeframe: '1h' as const,  // Changed from '1d' to '1h' to match trading strategy timeframe
+    timeframe: '5m' as const,  // 5-minute candles for ultra-responsive meme coin trading
 };
 
 export const assetsToTrade = [
@@ -37,14 +37,14 @@ export const assetsToTrade = [
 ];
 
 export const strategyConfig = {
-    timeframe: '1h' as const,      // Changed from 4h to 1h for faster meme coin signals
+    timeframe: '5m' as const,      // 5-minute candles for ultra-responsive meme coin signals
     historicalDataLimit: 100,
     tradeAmountUSDC: 500,
     takeProfitPercentage: 0.08,    // DEPRECATED: No longer used (trailing stop activates before TP can be reached)
-    stopLossPercentage: 0.01,      // 1% stop loss (consistent with 1% trailing stop)
+    stopLossPercentage: 0.01,      // 1% stop loss (consistent with dynamic trailing stop)
     // Strategy-specific parameters
-    shortSMAPeriod: 12,
-    longSMAPeriod: 26,
+    shortSMAPeriod: 12,            // SMA(12) on 5-min = 1 hour of data
+    longSMAPeriod: 26,             // SMA(26) on 5-min = 2.2 hours of data
     rsiPeriod: 14,
     rsiThreshold: 50,
     // RSI filter control - set to false for meme coins (momentum-driven assets)
@@ -53,5 +53,5 @@ export const strategyConfig = {
     requireRsiConfirmation: false,  // Set to true for more conservative entries
 };
 
-export const BOT_EXECUTION_INTERVAL = 15 * 60 * 1000;        // 15 minutes - main analysis cycle (96 checks/day)
-export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;           // 1 minute - position monitoring (increased from 15 min for better trailing stop capture)
+export const BOT_EXECUTION_INTERVAL = 5 * 60 * 1000;         // 5 minutes - main analysis cycle (288 checks/day)
+export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;        // 1 minute - position monitoring for trailing stop capture

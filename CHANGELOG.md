@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2025-11-17
+
+### Changed
+- **Timeframe Optimization: 1-hour → 5-minute candles** - Ultra-responsive strategy for meme coin pumps
+  - **Before:** 1-hour candles, 15-minute analysis cycle (96 checks/day)
+  - **After:** 5-minute candles, 5-minute analysis cycle (288 checks/day)
+  - **SMA Periods Adjusted:**
+    - SMA(12) on 5-min candles = 1 hour of price data (vs 12 hours on 1h candles)
+    - SMA(26) on 5-min candles = 2.2 hours of price data (vs 26 hours on 1h candles)
+  - **Rationale:** Meme coins can pump and dump in minutes; 1-hour candles were too slow to catch micro-trends
+  - **Expected Impact:**
+    - 3x faster signal detection (every 5 min vs every 15 min)
+    - Catches Golden Cross signals within 5 minutes of occurrence
+    - More trading opportunities (potential 2-3x increase in signals)
+    - Earlier entries during pumps (capturing more of initial move)
+  - **Trade-offs:**
+    - More signals = more trades (may increase false positives)
+    - Need to monitor performance closely to validate strategy effectiveness
+  - **API Impact:** Analysis calls increase from 480/day to 1,440/day (still well within GeckoTerminal's 43,200/day limit)
+  - **Market Health:** Also updated to 5-minute timeframe for consistency
+
+### Technical Details
+- Modified `strategyConfig.timeframe` from `'1h'` to `'5m'` in `src/config.ts`
+- Modified `marketFilterConfig.timeframe` from `'1h'` to `'5m'` in `src/config.ts`
+- Changed `BOT_EXECUTION_INTERVAL` from `15 * 60 * 1000` to `5 * 60 * 1000` (5 minutes)
+- Updated comments to reflect SMA periods in actual time (1 hour and 2.2 hours)
+
 ## [2.8.0] - 2025-11-17
 
 ### Added

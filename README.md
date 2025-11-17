@@ -6,8 +6,10 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Core Trading
 - **Automated Trading:** Executes buy and sell orders on Solana DEXs without manual intervention
-- **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 1-hour timeframe
-- **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends to protect capital during bearish markets
+- **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 5-minute timeframe (ultra-responsive for meme coins)
+  - SMA(12) = 1 hour of price data
+  - SMA(26) = 2.2 hours of price data
+- **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends on 5-minute candles to protect capital during bearish markets
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
 
 ### Risk Management
@@ -27,7 +29,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Monitoring & Alerts
 - **Dual-Speed Monitoring:**
-  - Main analysis cycle: Every 15 minutes (finds new opportunities) - 96 checks/day
+  - Main analysis cycle: Every 5 minutes (finds new opportunities) - 288 checks/day
   - Position monitoring: Every 1 minute (real-time TP/SL execution) - 1,440 checks/day
 - **Enhanced Telegram Notifications:**
   - Detailed trade alerts with entry price, indicators, and P&L
@@ -206,9 +208,18 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.8.0
+**Current Version:** 2.9.0
 
-### Latest Updates (v2.8.0)
+### Latest Updates (v2.9.0)
+- **Timeframe Optimization: 1-hour → 5-minute candles** - Ultra-responsive for meme coin pumps
+  - 5-minute candles with 5-minute analysis cycles (288 checks/day)
+  - SMA(12) = 1 hour of data, SMA(26) = 2.2 hours of data
+  - 3x faster signal detection (every 5 min vs every 15 min)
+  - Catches micro-trends and pumps that 1-hour candles miss
+  - More trading opportunities (2-3x increase in potential signals)
+  - Earlier entries during pumps for better profit capture
+
+### Previous Updates (v2.8.0)
 - **Dynamic Trailing Stops Based on Market Health** - Adaptive risk management
   - Trailing stop percentage now adjusts based on Market Health Index (1.5% to 3.5%)
   - Higher market health = wider trailing stop (lets winners run during strong bullish conditions)
