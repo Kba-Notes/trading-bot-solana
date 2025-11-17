@@ -3,6 +3,7 @@ import { logger, bot, chatId } from '../services.js';
 import { getOpenPositions } from '../order_executor/trader.js';
 import { getCurrentPrice } from '../data_extractor/jupiter.js';
 import { assetsToTrade } from '../config.js';
+import { getDynamicTrailingStop, getLatestMarketHealth } from '../bot.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -68,12 +69,13 @@ async function extractRecentLogs(minutes: number = 1): Promise<string | null> {
  */
 async function getPositionsStatus(): Promise<string> {
     const positions = getOpenPositions();
+    const marketHealth = getLatestMarketHealth();
 
     if (positions.length === 0) {
-        return '📊 *Current Status*\n\n💼 No open positions';
+        return `📊 *Current Status*\n\n🌡️ *Market Health:* ${marketHealth.toFixed(2)}\n💼 No open positions`;
     }
 
-    let status = `📊 *Current Status*\n\n💼 *Open Positions:* ${positions.length}\n\n`;
+    let status = `📊 *Current Status*\n\n🌡️ *Market Health:* ${marketHealth.toFixed(2)}\n💼 *Open Positions:* ${positions.length}\n\n`;
 
     for (const position of positions) {
         const assetConfig = assetsToTrade.find(a => a.mint === position.asset);
@@ -96,12 +98,14 @@ async function getPositionsStatus(): Promise<string> {
         status += `  P&L: \`${pnlSign}${pnlPercent.toFixed(2)}%\` (${pnlSign}$${pnlUSDC.toFixed(2)})\n`;
 
         if (position.trailingStopActive && position.highestPrice) {
-            const trailingStopPrice = position.highestPrice * 0.99;
+            // Use dynamic trailing stop based on current market health
+            const trailingStopPercent = getDynamicTrailingStop(marketHealth);
+            const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
             const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(decimals)}\`\n`;
+            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(decimals)}\` (${(trailingStopPercent * 100).toFixed(1)}% trail)\n`;
             status += `  💰 Potential P&L: \`${potentialPnlSign}${potentialPnlPercent.toFixed(2)}%\` (${potentialPnlSign}$${potentialPnlUSDC.toFixed(2)})\n`;
             status += `  📈 Highest: \`$${position.highestPrice.toFixed(decimals)}\`\n`;
         }

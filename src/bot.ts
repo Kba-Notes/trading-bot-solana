@@ -20,12 +20,34 @@ import { GoldenCrossStrategy } from './strategy/GoldenCrossStrategy.js';
 import { getErrorMessage, getErrorContext } from './errors/custom-errors.js';
 
 let executionCycleCounter = 0;
+let latestMarketHealth = 0; // Store latest market health for dynamic trailing stops
+
 const strategy = new GoldenCrossStrategy({
     shortSMAPeriod: strategyConfig.shortSMAPeriod,
     longSMAPeriod: strategyConfig.longSMAPeriod,
     rsiPeriod: strategyConfig.rsiPeriod,
     rsiThreshold: strategyConfig.rsiThreshold
 });
+
+/**
+ * Calculate dynamic trailing stop percentage based on market health
+ * Higher market health = wider trailing stop (allow more room for volatility)
+ * Lower market health = tighter trailing stop (protect capital)
+ */
+export function getDynamicTrailingStop(marketHealth: number): number {
+    if (marketHealth < 0) return 0.015;        // 1.5% - Bearish market, tight protection
+    else if (marketHealth < 0.3) return 0.02;  // 2.0% - Weak bullish, moderate room
+    else if (marketHealth < 0.6) return 0.025; // 2.5% - Moderate bullish, good room
+    else if (marketHealth < 0.9) return 0.03;  // 3.0% - Strong bullish, ample room
+    else return 0.035;                         // 3.5% - Very strong bullish, maximum room
+}
+
+/**
+ * Get the latest market health value (used by command handlers)
+ */
+export function getLatestMarketHealth(): number {
+    return latestMarketHealth;
+}
 
 // Fetches historical price data from CoinGecko with retry logic
 // CoinGecko auto-granularity: 1-90 days = hourly data, >90 days = daily data
@@ -160,16 +182,17 @@ async function checkOpenPositions() {
                 await savePositions(getOpenPositions());
             }
 
-            // Trail 1% below highest price (optimized for meme coin volatility with 1-min checks)
-            const trailingStopPrice = position.highestPrice * 0.99;
+            // Dynamic trailing stop based on market health (replaces fixed 1%)
+            const trailingStopPercent = getDynamicTrailingStop(latestMarketHealth);
+            const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
 
             // Calculate potential P&L if trailing stop is hit
             const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const pnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-            // Log trailing stop status with potential P&L and highest price
-            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)}, Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
+            // Log trailing stop status with dynamic percentage, potential P&L, and highest price
+            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)} (${(trailingStopPercent * 100).toFixed(1)}% trail @ MH=${latestMarketHealth.toFixed(2)}), Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
 
             // Show distance to move trailing up (how much price needs to rise to beat current high)
             const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
@@ -328,6 +351,7 @@ async function main() {
                 logger.info('--- New analysis cycle started ---');
 
                 const marketHealthIndex = await calculateMarketHealth();
+                latestMarketHealth = marketHealthIndex; // Store for dynamic trailing stops
 
                 await checkOpenPositions();
 
