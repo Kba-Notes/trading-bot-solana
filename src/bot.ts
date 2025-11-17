@@ -294,7 +294,7 @@ async function findNewOpportunities(marketHealthIndex: number) {
 }
 
 /**
- * Lightweight position monitoring loop - runs every 15 minutes
+ * Lightweight position monitoring loop - runs every 1 minute
  * Only checks positions when they exist (no market analysis)
  */
 async function positionMonitoringLoop() {
