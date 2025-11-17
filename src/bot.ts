@@ -35,10 +35,10 @@ const strategy = new GoldenCrossStrategy({
  * Lower market health = tighter trailing stop (protect capital)
  */
 export function getDynamicTrailingStop(marketHealth: number): number {
-    if (marketHealth < 0) return 0.015;        // 1.5% - Bearish market, tight protection
-    else if (marketHealth < 0.3) return 0.02;  // 2.0% - Weak bullish, moderate room
-    else if (marketHealth < 0.6) return 0.025; // 2.5% - Moderate bullish, good room
-    else if (marketHealth < 0.9) return 0.03;  // 3.0% - Strong bullish, ample room
+    if (marketHealth < 0) return 0.00;         // 0% - Immediate sell in bearish markets
+    else if (marketHealth < 0.3) return 0.005; // 0.5% - Weak bullish, very tight trailing
+    else if (marketHealth < 0.6) return 0.01;  // 1.0% - Moderate bullish, tight trailing
+    else if (marketHealth < 0.9) return 0.0225;// 2.25% - Strong bullish, moderate room
     else return 0.035;                         // 3.5% - Very strong bullish, maximum room
 }
 

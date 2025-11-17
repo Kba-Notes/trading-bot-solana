@@ -16,10 +16,10 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 - **Dynamic Exit Strategy:**
   - Stop Loss: -1% from entry (consistent tight risk management)
   - Dynamic Trailing Stop: Activates immediately at any profit, adapts to market conditions
-    - MH < 0: 1.5% trail (tight protection in bearish markets)
-    - MH 0-0.3: 2.0% trail (moderate room in weak bullish)
-    - MH 0.3-0.6: 2.5% trail (good room in moderate bullish)
-    - MH 0.6-0.9: 3.0% trail (ample room in strong bullish)
+    - MH < 0: 0% trail (immediate sell in bearish markets)
+    - MH 0-0.3: 0.5% trail (very tight protection in weak bullish)
+    - MH 0.3-0.6: 1.0% trail (tight protection in moderate bullish)
+    - MH 0.6-0.9: 2.25% trail (moderate room in strong bullish)
     - MH ≥ 0.9: 3.5% trail (maximum room in very strong bullish)
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
 - **Smart Entry Filters:**
@@ -219,9 +219,15 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
   - More trading opportunities (2-3x increase in potential signals)
   - Earlier entries during pumps for better profit capture
 
+### Previous Updates (v2.9.1)
+- **Tightened Dynamic Trailing Stop Thresholds** - More aggressive profit protection
+  - Changed thresholds: MH < 0: 0% (immediate sell), 0-0.3: 0.5%, 0.3-0.6: 1.0%, 0.6-0.9: 2.25%, ≥0.9: 3.5%
+  - Tighter trailing stops lock in gains faster while still giving room for strong bullish moves
+  - Critical: 0% trailing at MH < 0 means immediate exit when market turns bearish
+
 ### Previous Updates (v2.8.0)
 - **Dynamic Trailing Stops Based on Market Health** - Adaptive risk management
-  - Trailing stop percentage now adjusts based on Market Health Index (1.5% to 3.5%)
+  - Trailing stop percentage now adjusts based on Market Health Index (0% to 3.5%)
   - Higher market health = wider trailing stop (lets winners run during strong bullish conditions)
   - Lower market health = tighter trailing stop (protects capital during weak/bearish conditions)
   - Expected +25-35% P&L improvement by capturing larger moves during favorable market conditions

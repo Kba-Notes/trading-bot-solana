@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.1] - 2025-11-17
+
+### Changed
+- **Tightened Dynamic Trailing Stop Thresholds** - More aggressive profit protection to reduce drawdowns in volatile meme coin markets
+  - **Before:** MH < 0: 1.5%, MH 0-0.3: 2.0%, MH 0.3-0.6: 2.5%, MH 0.6-0.9: 3.0%, MH ≥0.9: 3.5%
+  - **After:** MH < 0: 0% (immediate sell), MH 0-0.3: 0.5%, MH 0.3-0.6: 1.0%, MH 0.6-0.9: 2.25%, MH ≥0.9: 3.5%
+  - **Rationale:** Previous thresholds were too loose, allowing profits to evaporate during sudden reversals. Tighter trailing stops lock in gains faster while still giving room for strong bullish moves (3.5% at MH ≥0.9)
+  - **Expected Impact:** Reduced profit giveback, better capital preservation during market uncertainty
+  - **Critical Change:** 0% trailing at MH < 0 means immediate exit when market turns bearish (no waiting for further decline)
+
+### Technical Details
+- Modified `getDynamicTrailingStop()` function in `src/bot.ts`:
+  - MH < 0: `0.015` → `0.00` (immediate sell)
+  - MH 0-0.3: `0.02` → `0.005` (0.5%)
+  - MH 0.3-0.6: `0.025` → `0.01` (1.0%)
+  - MH 0.6-0.9: `0.03` → `0.0225` (2.25%)
+  - MH ≥0.9: `0.035` (unchanged, 3.5%)
+
 ## [2.9.0] - 2025-11-17
 
 ### Changed

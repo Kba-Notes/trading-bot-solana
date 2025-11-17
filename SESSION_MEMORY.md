@@ -235,10 +235,10 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-13 (Latest session - v2.7.2 with improved log clarity + race condition fix + complete documentation workflow established)
+**Last Updated**: 2025-11-17 (Latest session - v2.9.1 with tightened dynamic trailing stop thresholds)
 **Status**: ✅ Ready for continuous development
 
-**Critical Workflow Reminder**: ALWAYS update CHANGELOG.md and README.md for user-facing changes with same priority as code commits!
+**Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
 
 ---
 
@@ -754,7 +754,40 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Result**: Delayed retries now check if position still exists before selling
    - **Status**: ✅ Fixed - no more ghost positions
 
-### 📊 Current Strategy Configuration (v2.7.2)
+33. **Tightened Dynamic Trailing Stop Thresholds** (Commit: TBD - Nov 17, 2025) - **v2.9.1**
+   - **STRATEGIC OPTIMIZATION**: More aggressive profit protection for volatile meme coin markets
+   - **User request**: Reduce trailing stop thresholds to lock in gains faster
+   - **Before** (loose thresholds):
+     - MH < 0: 1.5% trailing
+     - MH 0-0.3: 2.0% trailing
+     - MH 0.3-0.6: 2.5% trailing
+     - MH 0.6-0.9: 3.0% trailing
+     - MH ≥ 0.9: 3.5% trailing
+   - **After** (tight thresholds):
+     - MH < 0: 0% trailing (immediate sell in bearish markets)
+     - MH 0-0.3: 0.5% trailing (very tight protection)
+     - MH 0.3-0.6: 1.0% trailing (tight protection)
+     - MH 0.6-0.9: 2.25% trailing (moderate room)
+     - MH ≥ 0.9: 3.5% trailing (unchanged - maximum room for strong bull runs)
+   - **Rationale**: Previous thresholds too loose, allowing profits to evaporate during sudden reversals
+     - Tighter trailing locks in gains faster
+     - Still gives room for strong bullish moves (3.5% at MH ≥0.9)
+     - Critical: 0% at MH < 0 means immediate exit when market turns bearish (no waiting)
+   - **Expected Impact**: Reduced profit giveback, better capital preservation
+   - **Technical Implementation**:
+     - Modified `getDynamicTrailingStop()` function in `src/bot.ts`:
+       - MH < 0: `0.015` → `0.00`
+       - MH 0-0.3: `0.02` → `0.005`
+       - MH 0.3-0.6: `0.025` → `0.01`
+       - MH 0.6-0.9: `0.03` → `0.0225`
+       - MH ≥0.9: `0.035` (unchanged)
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.9.1 entry with before/after comparison
+     - README.md: Risk Management section and Previous Updates section
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Deployed - tighter risk management active
+
+### 📊 Current Strategy Configuration (v2.9.1)
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)
@@ -763,14 +796,18 @@ git status --ignored | grep .env  # Verify .env ignored
 - **Filter**: SMA slope > 0.1% (trend strength)
 - **Filter**: Volatility < 5% (market stability)
 
-**Exit Conditions (Optimized for 1-Minute Monitoring)**:
+**Exit Conditions (Optimized for 1-Minute Monitoring + Dynamic Trailing)**:
 - ~~Take Profit~~ **REMOVED** (unreachable with immediate trailing activation)
 - Stop Loss: **-1%** (tightened from -3% for consistency)
-- **Trailing Stop**: Activates **immediately** when price > entry, trails **1%** below highest price
-  - Immediate activation (from +1%) protects even smallest profits
-  - 1% trailing (from 3%) optimized for meme coin small moves (1-3%)
+- **Dynamic Trailing Stop**: Activates **immediately** when price > entry, percentage adapts to market health
+  - **MH < 0**: 0% trailing (immediate sell in bearish markets)
+  - **MH 0-0.3**: 0.5% trailing (very tight protection in weak bullish)
+  - **MH 0.3-0.6**: 1.0% trailing (tight protection in moderate bullish)
+  - **MH 0.6-0.9**: 2.25% trailing (moderate room in strong bullish)
+  - **MH ≥ 0.9**: 3.5% trailing (maximum room in very strong bullish)
+  - Immediate activation protects even smallest profits
   - Updates highestPrice every minute for accurate peak capture
-  - Data-driven: 1% trailing showed +6.45% improvement vs 3% trailing
+  - Tighter thresholds (v2.9.1) lock in gains faster while still giving room for strong moves
 
 **Monitoring Frequency (OPTIMIZED)**:
 - Main analysis cycle: **Every 15 minutes** (changed from 1 hour) - 96 checks/day
