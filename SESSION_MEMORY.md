@@ -235,7 +235,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-19 (Latest session - v2.9.2 with immediate trailing stop activation on entry)
+**Last Updated**: 2025-11-19 (Latest session - v2.9.3 with clean Telegram notifications)
 **Status**: ✅ Ready for continuous development
 
 **Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
@@ -787,7 +787,7 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Deployed - tighter risk management active
 
-34. **Immediate Trailing Stop Activation on Entry** (Commit: TBD - Nov 19, 2025) - **v2.9.2**
+34. **Immediate Trailing Stop Activation on Entry** (Commit: a97c738 - Nov 19, 2025) - **v2.9.2**
    - **CRITICAL FIX**: Trailing stop now activates immediately on position entry, not when price goes positive
    - **Problem Identified**: User found 4-minute delay when MH < 0
      - Timeline: MH = -0.03 calculated at 08:05:54
@@ -827,7 +827,39 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Deployed - immediate trailing activation active
 
-### 📊 Current Strategy Configuration (v2.9.2)
+35. **Removed Erroneous Telegram Notifications on Swap Failures** (Commit: TBD - Nov 19, 2025) - **v2.9.3**
+   - **BUG FIX**: Stopped sending error notifications for failed swap attempts that will be retried
+   - **Problem Identified**: User received confusing duplicate notifications
+     - Example at 03:44:42: First sell attempt failed with "Liquidity Insufficient"
+     - Bot sent: "🔴 SELL - SYSTEM" with $0.00 exit price and error details
+     - Retry succeeded at 03:44:48
+     - Bot sent: "🔴 SELL - WIF" with correct exit price and P&L
+     - Result: Two notifications for one sell operation (confusing!)
+   - **Root Cause**: `performJupiterSwap()` error handler sent notification immediately on ANY swap failure
+     - This happened even when retry logic would try again
+     - User got notified of failures that weren't actually final failures
+   - **User Request**: "I do not need to see that in telegram, but only the successful sell info. Basically only inform in telegram if the sell was not able to happen because all 4 attempts failed"
+   - **Implementation**:
+     - Modified `src/order_executor/trader.ts` line 177
+     - Removed: `sendTradeNotification({ asset: 'SYSTEM', action: 'SELL', price: 0, reason: 'Swap error...' })`
+     - Added comment: "Don't send notification here - retry logic will send CRITICAL alert if all attempts fail"
+     - Kept existing CRITICAL alert in `executeSellOrder()` (line 378) for when ALL 4 attempts fail
+   - **New Behavior**:
+     - Swap attempt fails → Logged to file (for debugging)
+     - Swap attempt fails → NO Telegram notification
+     - Retry succeeds → Send normal sell notification with correct P&L
+     - All 4 attempts fail → Send CRITICAL alert (already implemented)
+   - **Benefits**:
+     - Cleaner Telegram notifications (no spam)
+     - Less confusion (only see final outcome)
+     - Still get critical alerts when genuine failure occurs
+   - **Expected Impact**: Better user experience, less notification noise
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.9.3 entry
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Deployed - clean notifications active
+
+### 📊 Current Strategy Configuration (v2.9.3)
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)

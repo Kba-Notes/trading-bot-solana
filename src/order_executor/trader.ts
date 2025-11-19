@@ -174,12 +174,7 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
                 logger.error(`[Transaction Logs]: ${JSON.stringify(error.logs, null, 2)}`);
             }
         }
-        sendTradeNotification({
-            asset: 'SYSTEM',
-            action: 'SELL',
-            price: 0,
-            reason: `Swap error: ${error.response?.data || error.message}`
-        });
+        // Don't send notification here - retry logic will send CRITICAL alert if all attempts fail
         return false;
     }
 }

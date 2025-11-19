@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.3] - 2025-11-19
+
+### Fixed
+- **Removed Erroneous Telegram Notifications on Swap Failures** - Clean up notification spam during retries
+  - **Problem:** When a swap attempt failed (e.g., "Liquidity Insufficient"), bot sent "🔴 SELL - SYSTEM" notification immediately, even though retry logic would try again
+  - **User Impact:** Received confusing error notification, then immediately received successful sell notification when retry succeeded
+  - **Example:** First attempt failed at 03:44:42 → Sent error notification → Second attempt succeeded at 03:44:48 → Sent success notification
+  - **Fix:** Removed `sendTradeNotification()` call from `performJupiterSwap()` error handler
+  - **New Behavior:**
+    - Swap failures are logged but NOT notified to Telegram
+    - Only send CRITICAL alert if ALL 4 attempts fail (already implemented in `executeSellOrder()`)
+    - User only sees successful sell notification when retry works
+  - **Expected Impact:** Cleaner Telegram notifications, less confusion, only alerts on actual problems
+
+### Technical Details
+- Modified `src/order_executor/trader.ts` line 177:
+  - Removed: `sendTradeNotification({ asset: 'SYSTEM', action: 'SELL', price: 0, reason: 'Swap error...' })`
+  - Added comment: "Don't send notification here - retry logic will send CRITICAL alert if all attempts fail"
+- Existing CRITICAL alert logic (line 378) unchanged - still notifies if all 4 attempts fail
+
 ## [2.9.2] - 2025-11-19
 
 ### Changed
