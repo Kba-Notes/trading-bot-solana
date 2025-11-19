@@ -22,6 +22,11 @@ import { getErrorMessage, getErrorContext } from './errors/custom-errors.js';
 let executionCycleCounter = 0;
 let latestMarketHealth = 0; // Store latest market health for dynamic trailing stops
 
+// Momentum-based Market Health adjustment (v2.10.0)
+const MH_HISTORY_SIZE = 4; // Track last 4 periods (20 minutes)
+const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impact from backtesting)
+const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
+
 const strategy = new GoldenCrossStrategy({
     shortSMAPeriod: strategyConfig.shortSMAPeriod,
     longSMAPeriod: strategyConfig.longSMAPeriod,
@@ -47,6 +52,47 @@ export function getDynamicTrailingStop(marketHealth: number): number {
  */
 export function getLatestMarketHealth(): number {
     return latestMarketHealth;
+}
+
+/**
+ * Calculate momentum from recent MH history
+ * Returns average rate of change over last N periods
+ */
+function calculateMHMomentum(): number {
+    if (mhHistory.length < 2) {
+        return 0; // Not enough history
+    }
+
+    let totalChange = 0;
+    for (let i = 1; i < mhHistory.length; i++) {
+        totalChange += mhHistory[i].mh - mhHistory[i - 1].mh;
+    }
+
+    return totalChange / (mhHistory.length - 1);
+}
+
+/**
+ * Get momentum-adjusted Market Health
+ * Applies momentum factor to raw MH for more responsive decision making
+ * @param rawMH - Raw Market Health value
+ * @returns Adjusted Market Health with momentum applied
+ */
+function getAdjustedMarketHealth(rawMH: number): number {
+    const momentum = calculateMHMomentum();
+    const adjustedMH = rawMH + (momentum * MOMENTUM_WEIGHT);
+
+    // Log significant momentum adjustments
+    if (Math.abs(momentum) > 0.05 || Math.abs(adjustedMH - rawMH) > 0.1) {
+        logger.info(`📊 MH Momentum Adjustment: ${rawMH.toFixed(2)} → ${adjustedMH.toFixed(2)} (momentum: ${momentum > 0 ? '+' : ''}${momentum.toFixed(2)}, weight: ${MOMENTUM_WEIGHT})`);
+
+        if (momentum < -0.15) {
+            logger.warn(`⚠️  Negative momentum detected (${momentum.toFixed(2)}) - market declining`);
+        } else if (momentum > 0.15) {
+            logger.info(`✅ Positive momentum detected (${momentum.toFixed(2)}) - market recovering`);
+        }
+    }
+
+    return adjustedMH;
 }
 
 // Fetches historical price data from CoinGecko with retry logic
@@ -348,12 +394,22 @@ async function main() {
 
                 logger.info('--- New analysis cycle started ---');
 
-                const marketHealthIndex = await calculateMarketHealth();
-                latestMarketHealth = marketHealthIndex; // Store for dynamic trailing stops
+                // Calculate raw Market Health
+                const rawMarketHealth = await calculateMarketHealth();
+
+                // Add to history (maintain max size)
+                mhHistory.push({ timestamp: new Date(), mh: rawMarketHealth });
+                if (mhHistory.length > MH_HISTORY_SIZE) {
+                    mhHistory.shift(); // Remove oldest
+                }
+
+                // Calculate momentum-adjusted Market Health
+                const adjustedMarketHealth = getAdjustedMarketHealth(rawMarketHealth);
+                latestMarketHealth = adjustedMarketHealth; // Store adjusted MH for dynamic trailing stops
 
                 await checkOpenPositions();
 
-                const buySignals = await findNewOpportunities(marketHealthIndex);
+                const buySignals = await findNewOpportunities(adjustedMarketHealth);
 
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
@@ -361,7 +417,7 @@ async function main() {
                 // Send analysis summary after each cycle (with log file)
                 const openPositions = getOpenPositions();
                 await sendAnalysisSummary({
-                    marketHealth: marketHealthIndex,
+                    marketHealth: adjustedMarketHealth,
                     assetsAnalyzed: assetsToTrade.length,
                     buySignals,
                     openPositions: openPositions.length,
@@ -377,7 +433,7 @@ async function main() {
                         `❤️ **Heartbeat**\n` +
                         `Bot is still active.\n` +
                         `Open positions: ${openPositions.length}\n` +
-                        `Market Index: \`${marketHealthIndex.toFixed(2)}\`\n` +
+                        `Market Index: \`${adjustedMarketHealth.toFixed(2)}\`\n` +
                         `Uptime: ${metrics.uptime}\n` +
                         `API Success Rate: ${metrics.apiCalls.successRate}`
                     );

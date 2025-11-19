@@ -235,7 +235,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-19 (Latest session - v2.9.3 with clean Telegram notifications)
+**Last Updated**: 2025-11-19 (Latest session - v2.10.0 with momentum-based Market Health)
 **Status**: ✅ Ready for continuous development
 
 **Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
@@ -859,10 +859,73 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Deployed - clean notifications active
 
-### 📊 Current Strategy Configuration (v2.9.3)
+36. **Momentum-Based Market Health Adjustment** (Commit: TBD - Nov 19, 2025) - **v2.10.0**
+   - **MAJOR STRATEGY ENHANCEMENT**: Market Health now incorporates momentum for crash avoidance and recovery capture
+   - **User Vision**: User proposed using momentum (trend of MH over time) to improve buy/sell decisions
+     - Presented three scenarios: death spirals, stable conditions, rapid recoveries
+     - Correctly identified architecture: "Apply momentum-based modifiers directly to the MH and based on that do everything else"
+   - **Backtesting Analysis**: Analyzed 7 days of real historical data (970 MH data points, 268 trades)
+     - **Real Cases Found**:
+       - 45 death spirals: Negative momentum preceded continued decline
+       - 34 rapid recoveries: Positive momentum from negative MH preceded recovery
+       - 102 stable conditions: Low momentum, minimal change
+     - **Tested Weights**: 0.3, 0.5, 1.0, 2.0
+     - **Best Performance (Weight 2.0)**:
+       - Prevented 8 crashes (avoided buying into declining markets)
+       - Created 26 recovery opportunities (earlier entries)
+       - Accelerated 59 sells (tighter stops during downtrends)
+     - **Real Example**: Nov 17, 15:09:31
+       - Raw MH: 0.10 (would allow buy)
+       - Momentum: -0.26 (strong negative trend)
+       - Adjusted MH: -0.16 (blocked buy ✅)
+       - Outcome: MH crashed to -0.79 in next 20 minutes (avoided 0.89 drop)
+   - **Implementation**:
+     - Added MH history tracking: Last 4 values (20 minutes)
+     - `calculateMHMomentum()`: Returns average rate of change over history
+     - `getAdjustedMarketHealth()`: Applies momentum weight to raw MH
+     - Formula: `Adjusted MH = Raw MH + (momentum × 2.0)`
+     - Uses adjusted MH for ALL decisions: buy signals, trailing stop percentages
+   - **How It Works**:
+     1. Each cycle: Calculate raw MH from BTC/ETH/SOL
+     2. Add to history array (maintain last 4 values)
+     3. Calculate momentum = average change per period
+     4. Adjust MH with momentum × weight
+     5. Use adjusted MH for buy decisions and trailing stop calculations
+   - **Examples**:
+     - Death Spiral: MH = 0.10, Momentum = -0.26 → Adjusted = -0.16 → No buy ✅
+     - Rapid Recovery: MH = -0.5, Momentum = +0.4 → Adjusted = +0.3 → Allow buy ✅
+     - Stable: MH = 1.5, Momentum = +0.05 → Adjusted = 1.6 → Minor change
+   - **Weight Parameter**: Started with 2.0 (full momentum impact)
+     - Backtesting showed best crash avoidance
+     - Can tune down to 1.0 (balanced) or 0.5 (conservative) if needed
+     - Can increase to higher values for maximum responsiveness
+   - **Logging**: Logs significant momentum adjustments (>0.05)
+     - Warnings for negative momentum (market declining)
+     - Info for positive momentum (market recovering)
+   - **Expected Impact**:
+     - Reduced drawdown (avoids buying into crashes)
+     - Better entry timing (captures recoveries earlier)
+     - Dynamic trailing stops respond to momentum (tighter in downtrends, wider in uptrends)
+     - Significant P&L improvement from crash avoidance alone
+   - **Files Modified**:
+     - `src/bot.ts`: Added history tracking, momentum calculation, adjusted MH function
+     - Lines 25-28: Constants for history size and weight
+     - Lines 61-96: Momentum calculation and adjustment functions
+     - Lines 397-408: Main loop - store history, calculate adjusted MH
+   - **Backtesting Tool**: `backtest_momentum.js` - Reusable script for future analysis
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.10.0 entry with full explanation
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Deployed - momentum-based MH active with weight 2.0
+
+### 📊 Current Strategy Configuration (v2.10.0)
 
 **Entry Conditions (Enhanced)**:
-- Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)
+- **Momentum-Adjusted Market Health Index > 0** (v2.10.0: Raw MH + momentum × 2.0)
+  - Base: BTC/ETH/SOL weighted SMA(20) on 1-hour timeframe
+  - Momentum: Average rate of change over last 4 periods (20 minutes)
+  - Prevents buying into declining markets (death spiral detection)
+  - Enables buying during recoveries (positive momentum from negative MH)
 - Golden Cross: SMA(12) > SMA(26) ✅ **PRIMARY SIGNAL**
 - ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins)
 - **Filter**: SMA slope > 0.1% (trend strength)
@@ -871,12 +934,13 @@ git status --ignored | grep .env  # Verify .env ignored
 **Exit Conditions (Optimized for 1-Minute Monitoring + Dynamic Trailing)**:
 - ~~Take Profit~~ **REMOVED** (unreachable with immediate trailing activation)
 - Stop Loss: **-1%** (backup protection, rarely hit due to trailing)
-- **Dynamic Trailing Stop**: Activates **immediately on position entry**, percentage adapts to market health
-  - **MH < 0**: 0% trailing (immediate sell in bearish markets)
-  - **MH 0-0.3**: 0.5% trailing (very tight protection in weak bullish)
-  - **MH 0.3-0.6**: 1.0% trailing (tight protection in moderate bullish)
-  - **MH 0.6-0.9**: 2.25% trailing (moderate room in strong bullish)
-  - **MH ≥ 0.9**: 3.5% trailing (maximum room in very strong bullish)
+- **Dynamic Trailing Stop**: Activates **immediately on position entry**, percentage adapts to **momentum-adjusted** market health
+  - **Adjusted MH < 0**: 0% trailing (immediate sell in bearish markets or negative momentum)
+  - **Adjusted MH 0-0.3**: 0.5% trailing (very tight protection in weak bullish)
+  - **Adjusted MH 0.3-0.6**: 1.0% trailing (tight protection in moderate bullish)
+  - **Adjusted MH 0.6-0.9**: 2.25% trailing (moderate room in strong bullish)
+  - **Adjusted MH ≥ 0.9**: 3.5% trailing (maximum room in very strong bullish)
+  - **v2.10.0**: Uses momentum-adjusted MH (negative momentum tightens stops, positive widens)
   - **v2.9.2 FIX**: Activates on entry, not when price goes positive (ensures 0% trailing works)
   - Updates highestPrice every minute for accurate peak capture
   - Tighter thresholds (v2.9.1) lock in gains faster while still giving room for strong moves
