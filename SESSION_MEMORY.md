@@ -879,18 +879,29 @@ git status --ignored | grep .env  # Verify .env ignored
        - Momentum: -0.26 (strong negative trend)
        - Adjusted MH: -0.16 (blocked buy ✅)
        - Outcome: MH crashed to -0.79 in next 20 minutes (avoided 0.89 drop)
+   - **Period Optimization** (commits: f177a98, b162856, 8842ae7):
+     - Backtested multiple period lengths (2, 3, 4, 5, 6) with weight 2.0
+     - Results: 2 periods (Score 57) > 3 periods (Score 53) > 4 periods (Score 51)
+     - Initial deployment: 2 periods (10 minutes) - most responsive
+     - User preference: 3 periods (15 minutes) - balanced, safer feel
+     - Final: 3 periods (15 min) - only 7% less optimal than 2, but more stable
+   - **Enhanced Visibility** (commit: b162856):
+     - Logs always show: `Raw MH | Momentum | Adjusted MH`
+     - Telegram shows both raw and adjusted values with momentum adjustment
+     - Transparency: User can see impact of momentum on every decision
    - **Implementation**:
-     - Added MH history tracking: Last 4 values (20 minutes)
+     - Added MH history tracking: Last 3 values (15 minutes)
      - `calculateMHMomentum()`: Returns average rate of change over history
-     - `getAdjustedMarketHealth()`: Applies momentum weight to raw MH
+     - `getAdjustedMarketHealth()`: Applies momentum weight to raw MH, logs both values
      - Formula: `Adjusted MH = Raw MH + (momentum × 2.0)`
      - Uses adjusted MH for ALL decisions: buy signals, trailing stop percentages
    - **How It Works**:
      1. Each cycle: Calculate raw MH from BTC/ETH/SOL
-     2. Add to history array (maintain last 4 values)
+     2. Add to history array (maintain last 3 values)
      3. Calculate momentum = average change per period
      4. Adjust MH with momentum × weight
-     5. Use adjusted MH for buy decisions and trailing stop calculations
+     5. Log both raw and adjusted MH for transparency
+     6. Use adjusted MH for buy decisions and trailing stop calculations
    - **Examples**:
      - Death Spiral: MH = 0.10, Momentum = -0.26 → Adjusted = -0.16 → No buy ✅
      - Rapid Recovery: MH = -0.5, Momentum = +0.4 → Adjusted = +0.3 → Allow buy ✅
@@ -909,23 +920,27 @@ git status --ignored | grep .env  # Verify .env ignored
      - Significant P&L improvement from crash avoidance alone
    - **Files Modified**:
      - `src/bot.ts`: Added history tracking, momentum calculation, adjusted MH function
-     - Lines 25-28: Constants for history size and weight
-     - Lines 61-96: Momentum calculation and adjustment functions
-     - Lines 397-408: Main loop - store history, calculate adjusted MH
-   - **Backtesting Tool**: `backtest_momentum.js` - Reusable script for future analysis
+       - Lines 25-28: Constants (MH_HISTORY_SIZE = 3, MOMENTUM_WEIGHT = 2.0)
+       - Lines 61-96: Momentum calculation and adjustment functions
+       - Lines 397-408: Main loop - store history, calculate adjusted MH
+     - `src/notifier/telegram.ts`: Enhanced visibility
+       - Updated AnalysisUpdate interface to include rawMarketHealth
+       - Modified sendAnalysisSummary() to show both raw and adjusted MH
+   - **Backtesting Tool**: `backtest_momentum.js` - Tests multiple periods/weights for optimization
    - **Documentation Updated**:
-     - CHANGELOG.md: v2.10.0 entry with full explanation
+     - CHANGELOG.md: v2.10.0 entry with period optimization and visibility details
      - SESSION_MEMORY.md: This chronological entry
-   - **Status**: ✅ Deployed - momentum-based MH active with weight 2.0
+   - **Status**: ✅ Deployed - momentum-based MH active (3 periods, weight 2.0)
 
 ### 📊 Current Strategy Configuration (v2.10.0)
 
 **Entry Conditions (Enhanced)**:
 - **Momentum-Adjusted Market Health Index > 0** (v2.10.0: Raw MH + momentum × 2.0)
   - Base: BTC/ETH/SOL weighted SMA(20) on 1-hour timeframe
-  - Momentum: Average rate of change over last 4 periods (20 minutes)
+  - Momentum: Average rate of change over last 3 periods (15 minutes)
   - Prevents buying into declining markets (death spiral detection)
   - Enables buying during recoveries (positive momentum from negative MH)
+  - Both raw and adjusted MH shown in logs and Telegram for transparency
 - Golden Cross: SMA(12) > SMA(26) ✅ **PRIMARY SIGNAL**
 - ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins)
 - **Filter**: SMA slope > 0.1% (trend strength)

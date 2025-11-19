@@ -12,34 +12,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **🚀 Momentum-Based Market Health Adjustment** - Major strategy enhancement for crash avoidance and recovery capture
   - **What:** Market Health now incorporates momentum (trend of MH over recent periods) for more responsive trading decisions
-  - **Why:** Backtesting on 7 days of historical data showed:
-    - **8 crashes prevented** (avoided buying into declining markets)
-    - **26 recovery opportunities** created (earlier entries during recoveries)
-    - **59 sells accelerated** (tighter stops during downtrends)
-    - Real example: Nov 17, 15:09 - Prevented buy at MH 0.10 before crash to -0.79
+  - **Period Optimization:** Backtested 2, 3, 4, 5, 6 periods to find optimal lookback window
+    - **Initial:** 4 periods (20 min) - Score 51
+    - **Optimal:** 2 periods (10 min) - Score 57 (11% better)
+    - **Final (conservative):** 3 periods (15 min) - Score 53 (balanced approach per user preference)
+  - **Why 3 periods:**
+    - Balances responsiveness with stability
+    - Aligns with 15-minute analysis cycle
+    - Only 7% less optimal than 2, but feels safer
+    - Still 4% better than original 4 periods
+  - **Backtesting Results (3 periods, weight 2.0):**
+    - **7 crashes prevented** (avoided buying into declining markets)
+    - **32 recovery opportunities** created (earlier entries during recoveries)
+    - **Accelerated sells** during downtrends (tighter stops from negative momentum)
   - **How it works:**
-    1. Tracks last 4 MH values (20 minutes of history)
-    2. Calculates momentum = average rate of change
+    1. Tracks last 3 MH values (15 minutes of history)
+    2. Calculates momentum = average rate of change over 3 periods
     3. Adjusts MH: `Adjusted MH = Raw MH + (momentum × 2.0)`
     4. Uses adjusted MH for ALL decisions (buy signals, trailing stop percentages)
+  - **Visibility:** Both raw and adjusted MH shown in logs and Telegram
+    - Logs: `Raw=X.XX | Momentum=+X.XXX | Adjusted=X.XX`
+    - Telegram: Shows both values with momentum adjustment
   - **Examples:**
     - **Death Spiral Detection:** MH = 0.10, Momentum = -0.26 → Adjusted MH = -0.16 → Blocks buy ✅
     - **Rapid Recovery:** MH = -0.5, Momentum = +0.4 → Adjusted MH = +0.3 → Allows buy ✅
     - **Stable Market:** MH = 1.5, Momentum = +0.05 → Adjusted MH = 1.6 → Minor adjustment
-  - **Weight Parameter:** Started with 2.0 (full momentum impact) based on backtesting showing best crash avoidance
-  - **Logging:** Significant momentum adjustments (>0.05) logged with warnings for negative trends
+  - **Weight Parameter:** 2.0 (full momentum impact) based on backtesting showing best crash avoidance
 
 ### Technical Details
 - Modified `src/bot.ts`:
-  - Added `mhHistory` array to track last 4 MH values with timestamps
+  - Added `mhHistory` array to track last 3 MH values with timestamps
   - Added `calculateMHMomentum()` function - calculates average rate of change
-  - Added `getAdjustedMarketHealth()` function - applies momentum weight to raw MH
+  - Added `getAdjustedMarketHealth()` function - applies momentum weight to raw MH, logs both values
   - Updated main execution loop to:
     1. Store raw MH in history
     2. Calculate adjusted MH
     3. Use adjusted MH for all decisions (buy signals, trailing stops, notifications)
-  - Constants: `MH_HISTORY_SIZE = 4`, `MOMENTUM_WEIGHT = 2.0`
-- Backtesting script: `backtest_momentum.js` - Analyzed 970 MH data points, 268 trades over 7 days
+  - Constants: `MH_HISTORY_SIZE = 3`, `MOMENTUM_WEIGHT = 2.0`
+- Modified `src/notifier/telegram.ts`:
+  - Updated `AnalysisUpdate` interface to include optional `rawMarketHealth`
+  - Modified `sendAnalysisSummary()` to display both raw and adjusted MH
+- Backtesting script: `backtest_momentum.js` - Tests multiple period lengths (2-6) and weights (0.3-2.0)
 
 ### Impact
 - **Crash Avoidance:** 45 real death spirals detected in historical data - momentum prevents buying into these
