@@ -13,6 +13,7 @@ import { savePositions, loadPositions } from '../persistence/positions.js';
 import { retryWithBackoff } from '../utils/async.js';
 import { PerformanceMetrics } from '../monitoring/metrics.js';
 import { TradeExecutionError, getErrorMessage } from '../errors/custom-errors.js';
+import { getLatestMarketHealth, getDynamicTrailingStop } from '../bot.js';
 
 export interface OpenPosition {
     id: number;
@@ -228,14 +229,22 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
     if (success) {
         logger.info(`✅ Buy successful for ${assetName} after ${retryCount + 1} attempt(s)`);
 
+        // Get current market health to set initial trailing stop
+        const currentMarketHealth = getLatestMarketHealth();
+        const trailingStopPercent = getDynamicTrailingStop(currentMarketHealth);
+
         const position: OpenPosition = {
             id: nextPositionId++,
             asset: assetMint,
             entryPrice: price,
             amount: amountUSDC,
-            timestamp: new Date()
+            timestamp: new Date(),
+            trailingStopActive: true,  // Activate trailing stop immediately on entry
+            highestPrice: price         // Set highest price to entry price
         };
         openPositions.push(position);
+
+        logger.info(`🔒 Trailing stop activated immediately for ${assetName} at entry ($${price.toFixed(8)}) with ${(trailingStopPercent * 100).toFixed(1)}% trail (MH=${currentMarketHealth.toFixed(2)})`);
 
         // Persist positions to disk
         await savePositions(openPositions);

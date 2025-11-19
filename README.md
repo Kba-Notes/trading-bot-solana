@@ -15,13 +15,14 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 ### Risk Management
 - **Dynamic Exit Strategy:**
   - Stop Loss: -1% from entry (consistent tight risk management)
-  - Dynamic Trailing Stop: Activates immediately at any profit, adapts to market conditions
+  - Dynamic Trailing Stop: Activates immediately on position entry, adapts to market conditions
     - MH < 0: 0% trail (immediate sell in bearish markets)
     - MH 0-0.3: 0.5% trail (very tight protection in weak bullish)
     - MH 0.3-0.6: 1.0% trail (tight protection in moderate bullish)
     - MH 0.6-0.9: 2.25% trail (moderate room in strong bullish)
     - MH ≥ 0.9: 3.5% trail (maximum room in very strong bullish)
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
+  - Protection active from moment of entry (not waiting for profit)
 - **Smart Entry Filters:**
   - Trend strength: Requires minimum 0.1% SMA slope
   - Volatility filter: Pauses trading when volatility > 5%
@@ -187,15 +188,15 @@ export const assetsToTrade = [
 5. **Low Volatility** - Average volatility < 5% (avoids choppy markets)
 
 ### Exit Conditions
-- **Stop Loss:** Price drops to -1% from entry (consistent with trailing stop)
-- **Trailing Stop:**
-  - Activates immediately when price > entry (any profit)
-  - Trails 1% below the highest price seen (tightened from 3% based on data)
-  - Sells when price drops 1% from the highest price (not from entry)
+- **Stop Loss:** Price drops to -1% from entry (backup protection)
+- **Dynamic Trailing Stop:**
+  - Activates immediately on position entry (not waiting for profit)
+  - Trailing percentage adapts to Market Health Index (0% to 3.5%)
+  - Sells when current price drops below (highestPrice × (1 - trailingPercent))
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
-  - Example: Buy at $0.100, price hits $0.103 (+3%) → Trailing at $0.10197 locks +1.97% profit
-  - Data shows: 1% trailing captured +3.91% vs -2.54% with 3% trailing (24h backtest)
+  - Example (MH=1.0): Buy at $0.100, price hits $0.103 → Trailing at $0.09940 (3.5% below $0.103)
+  - Critical: MH < 0 = 0% trailing = immediate sell when market turns bearish
 - **No Take Profit:** Removed to let trailing stop manage all exits
 
 ### Expected Performance
@@ -218,6 +219,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
   - Catches micro-trends and pumps that 1-hour candles miss
   - More trading opportunities (2-3x increase in potential signals)
   - Earlier entries during pumps for better profit capture
+
+### Previous Updates (v2.9.2)
+- **Immediate Trailing Stop Activation** - Critical fix for instant bearish market exits
+  - Trailing stop now activates immediately on position entry (not waiting for profit)
+  - Fixes 4-minute delay issue when MH < 0 (was waiting for price to go positive)
+  - Protection active from moment of entry, ensures 0% trailing works correctly
 
 ### Previous Updates (v2.9.1)
 - **Tightened Dynamic Trailing Stop Thresholds** - More aggressive profit protection

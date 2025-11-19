@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.2] - 2025-11-19
+
+### Changed
+- **Immediate Trailing Stop Activation on Entry** - Critical fix to ensure 0% trailing (immediate sell) works correctly when MH < 0
+  - **Problem:** Trailing stop only activated when position went into profit, causing delays when MH turned negative
+  - **Example:** MH = -0.03 at 08:05:54, but PENG not sold until 08:09:18 (4-minute delay waiting for price to go positive)
+  - **Solution:** Trailing stop now activates immediately upon position entry, not when price goes positive
+  - **New Behavior:**
+    - BUY executed → Trailing stop activated immediately at entry price
+    - Initial trailing percentage based on current Market Health at entry
+    - If MH < 0 after entry → Immediate sell on next position check (no waiting for profit)
+    - Protection active from the moment of entry
+  - **Benefits:**
+    - Immediate sell when MH < 0 works correctly (no 4-minute delays)
+    - Position protected from moment of entry, not after going into profit
+    - More logical and safer risk management
+  - **Expected Impact:** Faster exits when market turns bearish, better capital preservation
+
+### Technical Details
+- Modified `src/order_executor/trader.ts`:
+  - Added imports: `getLatestMarketHealth`, `getDynamicTrailingStop` from `bot.ts`
+  - Position creation now sets: `trailingStopActive: true`, `highestPrice: entryPrice`
+  - Logs trailing activation: "🔒 Trailing stop activated immediately for {ASSET} at entry"
+- Modified `src/bot.ts`:
+  - Removed conditional trailing activation logic (`if (currentPrice > position.entryPrice && !position.trailingStopActive)`)
+  - Added fallback activation for positions loaded from disk
+  - Simplified position monitoring logic
+
 ## [2.9.1] - 2025-11-17
 
 ### Changed

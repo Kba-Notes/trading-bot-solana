@@ -161,17 +161,15 @@ async function checkOpenPositions() {
 
         const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
 
-        // Trailing stop logic: Activate as soon as price is above entry (any profit)
-        // Check if we should activate trailing stop
-        if (currentPrice > position.entryPrice && !position.trailingStopActive) {
+        // Ensure trailing stop is active (for positions loaded from disk that may not have it set)
+        if (!position.trailingStopActive) {
             position.trailingStopActive = true;
-            position.highestPrice = currentPrice;
-            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} at $${currentPrice.toFixed(decimals)} (+${((currentPrice - position.entryPrice) / position.entryPrice * 100).toFixed(2)}%)`);
-            // Persist the updated position state
+            position.highestPrice = Math.max(currentPrice, position.entryPrice);
             await savePositions(getOpenPositions());
+            logger.info(`🔒 Trailing stop activated for ${assetConfig.name} (loaded from disk)`);
         }
 
-        // If trailing stop is active, monitor it regardless of current price level
+        // Monitor trailing stop (should always be active for all positions)
         if (position.trailingStopActive) {
             // Update highest price if current is higher
             const previousHighest = position.highestPrice || currentPrice;

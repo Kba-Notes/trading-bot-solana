@@ -235,7 +235,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-17 (Latest session - v2.9.1 with tightened dynamic trailing stop thresholds)
+**Last Updated**: 2025-11-19 (Latest session - v2.9.2 with immediate trailing stop activation on entry)
 **Status**: ✅ Ready for continuous development
 
 **Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
@@ -754,7 +754,7 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Result**: Delayed retries now check if position still exists before selling
    - **Status**: ✅ Fixed - no more ghost positions
 
-33. **Tightened Dynamic Trailing Stop Thresholds** (Commit: TBD - Nov 17, 2025) - **v2.9.1**
+33. **Tightened Dynamic Trailing Stop Thresholds** (Commit: c4347d8 - Nov 17, 2025) - **v2.9.1**
    - **STRATEGIC OPTIMIZATION**: More aggressive profit protection for volatile meme coin markets
    - **User request**: Reduce trailing stop thresholds to lock in gains faster
    - **Before** (loose thresholds):
@@ -787,7 +787,47 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Deployed - tighter risk management active
 
-### 📊 Current Strategy Configuration (v2.9.1)
+34. **Immediate Trailing Stop Activation on Entry** (Commit: TBD - Nov 19, 2025) - **v2.9.2**
+   - **CRITICAL FIX**: Trailing stop now activates immediately on position entry, not when price goes positive
+   - **Problem Identified**: User found 4-minute delay when MH < 0
+     - Timeline: MH = -0.03 calculated at 08:05:54
+     - PENG position at -0.13% (not in profit, so trailing not activated)
+     - Waited until 08:08:13 when PENG hit +0.01% to activate trailing
+     - Finally sold at 08:09:18 (4-minute total delay)
+   - **Root Cause**: Trailing stop only activated when `currentPrice > entryPrice`
+     - Bot waited for profit before setting protection
+     - When MH < 0 (0% trailing = immediate sell), this caused delays
+   - **User's Solution** (brilliant insight):
+     - "Activate trailing mechanism from the moment we open a position"
+     - If we can buy (MH > 0), we can already establish trailing stop based on current MH
+     - No need to wait for price to go positive
+   - **Implementation**:
+     - Modified `src/order_executor/trader.ts`:
+       - Added imports: `getLatestMarketHealth()`, `getDynamicTrailingStop()`
+       - Position creation now sets: `trailingStopActive: true`, `highestPrice: entryPrice`
+       - Logs: "🔒 Trailing stop activated immediately for {ASSET} at entry"
+     - Modified `src/bot.ts`:
+       - Removed conditional activation: `if (currentPrice > position.entryPrice && !position.trailingStopActive)`
+       - Added fallback for positions loaded from disk without trailing stop set
+       - Simplified monitoring logic
+   - **New Behavior**:
+     - BUY executed at $0.100 with MH = 0.5 → Trailing stop active immediately with 1.0% trail
+     - Trailing stop price = $0.099 (1% below entry)
+     - If price drops below $0.099 on next check → Immediate sell
+     - If MH < 0 after entry → 0% trailing = sell at current price on next check (no waiting)
+   - **Benefits**:
+     - No more 4-minute delays when market turns bearish
+     - Position protected from the moment of entry
+     - More logical risk management (why wouldn't you set a stop immediately?)
+     - Ensures 0% trailing (immediate sell) works as intended
+   - **Expected Impact**: Faster exits when MH < 0, better capital preservation, cleaner logic
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.9.2 entry with problem/solution
+     - README.md: Updated "Activates immediately on position entry" in two places
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Deployed - immediate trailing activation active
+
+### 📊 Current Strategy Configuration (v2.9.2)
 
 **Entry Conditions (Enhanced)**:
 - Market Health Index > 0 (BTC/ETH/SOL weighted SMA(20) on **1-hour timeframe**)
@@ -798,14 +838,14 @@ git status --ignored | grep .env  # Verify .env ignored
 
 **Exit Conditions (Optimized for 1-Minute Monitoring + Dynamic Trailing)**:
 - ~~Take Profit~~ **REMOVED** (unreachable with immediate trailing activation)
-- Stop Loss: **-1%** (tightened from -3% for consistency)
-- **Dynamic Trailing Stop**: Activates **immediately** when price > entry, percentage adapts to market health
+- Stop Loss: **-1%** (backup protection, rarely hit due to trailing)
+- **Dynamic Trailing Stop**: Activates **immediately on position entry**, percentage adapts to market health
   - **MH < 0**: 0% trailing (immediate sell in bearish markets)
   - **MH 0-0.3**: 0.5% trailing (very tight protection in weak bullish)
   - **MH 0.3-0.6**: 1.0% trailing (tight protection in moderate bullish)
   - **MH 0.6-0.9**: 2.25% trailing (moderate room in strong bullish)
   - **MH ≥ 0.9**: 3.5% trailing (maximum room in very strong bullish)
-  - Immediate activation protects even smallest profits
+  - **v2.9.2 FIX**: Activates on entry, not when price goes positive (ensures 0% trailing works)
   - Updates highestPrice every minute for accurate peak capture
   - Tighter thresholds (v2.9.1) lock in gains faster while still giving room for strong moves
 
