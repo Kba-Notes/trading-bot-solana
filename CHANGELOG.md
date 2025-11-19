@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.1] - 2025-11-19
+
+### Fixed
+- **🔧 Market Health Timeframe Alignment** - Critical fix to align MH calculation with bot's 5-minute analysis cycle
+  - **Issue:** Bot was using hourly candles for SMA(20) calculation but running analysis every 5 minutes
+    - CoinGecko API was returning 48 hourly data points (last 2 days)
+    - SMA(20) represented last 20 HOURS, not last 20 analysis cycles
+    - User's Binance 5-minute charts showed prices above MA(20), but bot showed negative MH
+  - **Fix:** Changed `getCoingeckoHistoricalData()` to request 0.15 days (3.6 hours) instead of 2 days
+    - CoinGecko returns 5-minute interval data when days <= 1
+    - Now fetches ~43 data points at 5-minute intervals
+    - SMA(20) now represents last 100 minutes (20 × 5-min candles), aligning with Binance 5-min charts
+  - **Impact:** MH values now match user's Binance chart observations
+    - More accurate market sentiment detection
+    - Better alignment between bot decisions and visual chart analysis
+    - 5-minute MH calculation matches 5-minute bot execution cycle
+  - **Technical:** Modified `src/bot.ts:104` - Changed URL parameter from `days=2` to `days=0.15`
+
 ## [2.10.0] - 2025-11-19
 
 ### Added

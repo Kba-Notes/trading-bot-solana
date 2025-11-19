@@ -932,11 +932,48 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Deployed - momentum-based MH active (3 periods, weight 2.0)
 
-### 📊 Current Strategy Configuration (v2.10.0)
+37. **Market Health Timeframe Alignment** (Commit: TBD - Nov 19, 2025) - **v2.10.1**
+   - **CRITICAL FIX**: Aligned MH calculation timeframe with bot's 5-minute analysis cycle
+   - **Issue Discovered**: User noticed raw MH showing negative values when Binance 5-minute charts showed all coins (BTC, ETH, SOL) above their MA(20)
+     - User provided screenshots of Binance 5-min charts showing prices above MA(20)
+     - Bot was calculating MH every 5 minutes (correct cycle frequency)
+     - But MH used hourly candles for SMA(20), not 5-minute candles
+   - **Root Cause**: `getCoingeckoHistoricalData()` requested 2 days of data
+     - CoinGecko auto-granularity: 1-90 days = hourly data
+     - API returned 48 hourly data points (last 2 days)
+     - SMA(20) represented last 20 HOURS, not last 20 analysis cycles
+     - Timeframe mismatch: Bot runs every 5 minutes but analyzed 20-hour market trends
+   - **Fix**: Changed CoinGecko API request from 2 days to 0.15 days (3.6 hours)
+     - CoinGecko returns 5-minute interval data when days <= 1
+     - 0.15 days = 3.6 hours = 216 minutes
+     - Returns ~43 data points at 5-minute intervals
+     - SMA(20) now represents last 100 minutes (20 × 5-min candles)
+     - Aligns perfectly with bot's 5-minute analysis cycle
+   - **Impact**:
+     - MH values now match Binance 5-minute chart observations
+     - More accurate market sentiment detection (5-minute trends vs 20-hour trends)
+     - Better alignment between bot decisions and visual chart analysis
+     - User can directly compare bot's MH with their Binance 5-min MA(20) charts
+     - Momentum calculation also benefits from aligned timeframe (3 periods = 15 min, not 3 hours)
+   - **Technical Implementation**:
+     - Modified `src/bot.ts:98-125` - `getCoingeckoHistoricalData()` function
+     - Changed URL parameter: `days=2` → `days=0.15`
+     - Updated comments to reflect 5-minute granularity
+     - Comment now explains: "Request 0.15 days (3.6 hours) to get 5-minute candles"
+   - **Before vs After**:
+     - **Before**: days=2 → 48 hourly candles → SMA(20) = last 20 hours
+     - **After**: days=0.15 → 43 5-min candles → SMA(20) = last 100 minutes
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.10.1 entry with issue, fix, and impact details
+     - SESSION_MEMORY.md: This chronological entry
+     - Updated "Current Strategy Configuration" to reflect 5-minute timeframe
+   - **Status**: ✅ Deployed - MH now calculated on 5-minute timeframe
+
+### 📊 Current Strategy Configuration (v2.10.1)
 
 **Entry Conditions (Enhanced)**:
 - **Momentum-Adjusted Market Health Index > 0** (v2.10.0: Raw MH + momentum × 2.0)
-  - Base: BTC/ETH/SOL weighted SMA(20) on 1-hour timeframe
+  - Base: BTC/ETH/SOL weighted SMA(20) on 5-minute timeframe (v2.10.1: aligned with bot's 5-min cycle)
   - Momentum: Average rate of change over last 3 periods (15 minutes)
   - Prevents buying into declining markets (death spiral detection)
   - Enables buying during recoveries (positive momentum from negative MH)

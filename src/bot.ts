@@ -96,14 +96,15 @@ function getAdjustedMarketHealth(rawMH: number): number {
 }
 
 // Fetches historical price data from CoinGecko with retry logic
-// CoinGecko auto-granularity: 1-90 days = hourly data, >90 days = daily data
+// CoinGecko auto-granularity: days<=1 = 5-minute data, 1-90 days = hourly data, >90 days = daily data
 async function getCoingeckoHistoricalData(id: string, retries: number = 3): Promise<number[]> {
-    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=2`;
+    // Request 0.15 days (3.6 hours = 216 minutes) to get 5-minute candles
+    // This gives us ~43 data points (5-minute intervals) for SMA(20) on 5-minute timeframe
+    // Aligns with bot's 5-minute analysis cycle (BOT_EXECUTION_INTERVAL)
+    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=0.15`;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // Request last 2 days of data = automatic hourly granularity (48 hourly candles)
-            // This gives us enough data for SMA(20) on hourly timeframe
             const response = await axios.get(url);
             if (response.data && response.data.prices) {
                 return response.data.prices.map((priceEntry: [number, number]) => priceEntry[1]);
