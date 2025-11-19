@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.2] - 2025-11-19
+
+### Fixed
+- **📝 Documentation: Corrected Token Signal Timeframe Comments** - Fixed misleading comments in config
+  - **Issue:** Config comments stated "5-minute candles" but implementation uses 1-minute candles
+    - `src/config.ts` line 40: Comment said "5-minute candles"
+    - `src/config.ts` line 46-47: Comments said "SMA(12) on 5-min = 1 hour" and "SMA(26) on 5-min = 2.2 hours"
+    - Reality: `timeframe: '5m'` maps to GeckoTerminal `/ohlcv/minute` endpoint (returns 1-minute candles)
+  - **Fix:** Updated comments to accurately reflect actual behavior
+    - Line 40: Now states "Maps to GeckoTerminal '/ohlcv/minute' = 1-minute candles"
+    - Line 46: Now states "SMA(12) on 1-min candles = 12 minutes of data"
+    - Line 47: Now states "SMA(26) on 1-min candles = 26 minutes of data"
+    - Line 48: Added "RSI(14) on 1-min candles = 14 minutes of data"
+  - **Clarification:** Multi-timeframe strategy confirmed working as designed
+    - Market Health (macro filter): 5-minute candles, SMA(20) = 100 minutes
+    - Token signals (micro entry): 1-minute candles, SMA(12/26) = 12/26 minutes
+    - This aggressive timeframe catches meme coin pumps early while MH filter prevents bad market conditions
+  - **Impact:** Documentation now matches implementation, no behavior change
+  - **Technical:** Modified `src/config.ts:40,46-48` - Comments only, no code changes
+
 ## [2.10.1] - 2025-11-19
 
 ### Fixed

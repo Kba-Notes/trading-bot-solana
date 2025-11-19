@@ -37,15 +37,15 @@ export const assetsToTrade = [
 ];
 
 export const strategyConfig = {
-    timeframe: '5m' as const,      // 5-minute candles for ultra-responsive meme coin signals
+    timeframe: '5m' as const,      // Maps to GeckoTerminal '/ohlcv/minute' = 1-minute candles (see jupiter.ts:49)
     historicalDataLimit: 100,
     tradeAmountUSDC: 500,
     takeProfitPercentage: 0.08,    // DEPRECATED: No longer used (trailing stop activates before TP can be reached)
     stopLossPercentage: 0.01,      // 1% stop loss (consistent with dynamic trailing stop)
     // Strategy-specific parameters
-    shortSMAPeriod: 12,            // SMA(12) on 5-min = 1 hour of data
-    longSMAPeriod: 26,             // SMA(26) on 5-min = 2.2 hours of data
-    rsiPeriod: 14,
+    shortSMAPeriod: 12,            // SMA(12) on 1-min candles = 12 minutes of data
+    longSMAPeriod: 26,             // SMA(26) on 1-min candles = 26 minutes of data
+    rsiPeriod: 14,                 // RSI(14) on 1-min candles = 14 minutes of data
     rsiThreshold: 50,
     // RSI filter control - set to false for meme coins (momentum-driven assets)
     // Meme coins often start rallies from oversold conditions (RSI < 50)

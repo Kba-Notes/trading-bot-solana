@@ -969,7 +969,39 @@ git status --ignored | grep .env  # Verify .env ignored
      - Updated "Current Strategy Configuration" to reflect 5-minute timeframe
    - **Status**: ✅ Deployed - MH now calculated on 5-minute timeframe
 
-### 📊 Current Strategy Configuration (v2.10.1)
+38. **Corrected Token Signal Timeframe Documentation** (Commit: TBD - Nov 19, 2025) - **v2.10.2**
+   - **DOCUMENTATION FIX**: Fixed misleading comments in config that stated incorrect timeframe for token buy signals
+   - **Issue Discovered**: User asked to confirm timeframes being used
+     - Review of code revealed config comments claimed "5-minute candles" for token signals
+     - Comments said "SMA(12) on 5-min = 1 hour of data" and "SMA(26) on 5-min = 2.2 hours"
+     - Actual implementation: `timeframe: '5m'` maps to GeckoTerminal `/ohlcv/minute` endpoint
+     - GeckoTerminal returns **1-minute candles**, not 5-minute
+   - **Root Cause**: Comments written based on intended design, but implementation uses different API behavior
+     - `src/data_extractor/jupiter.ts` line 49: Maps anything != '1h' or '1d' to 'minute'
+     - GeckoTerminal `/ohlcv/minute` endpoint returns 1-minute candles
+     - Config incorrectly documented as "5-minute candles"
+   - **Actual Behavior Confirmed**:
+     - Market Health (BTC/ETH/SOL): 5-minute candles, SMA(20) = 100 minutes (macro filter)
+     - Token signals (meme coins): 1-minute candles, SMA(12/26) = 12/26 minutes (micro entry timing)
+     - RSI(14): 1-minute candles = 14 minutes
+   - **Fix**: Updated comments in `src/config.ts` to reflect reality
+     - Line 40: "Maps to GeckoTerminal '/ohlcv/minute' = 1-minute candles (see jupiter.ts:49)"
+     - Line 46: "SMA(12) on 1-min candles = 12 minutes of data"
+     - Line 47: "SMA(26) on 1-min candles = 26 minutes of data"
+     - Line 48: "RSI(14) on 1-min candles = 14 minutes of data"
+   - **Strategic Clarification**: Multi-timeframe approach is intentional and beneficial
+     - **Market Health (5-min)**: Broader market context, filters out bad trading environments
+     - **Token signals (1-min)**: Ultra-fast entry timing to catch meme coin pumps immediately
+     - **Rationale**: Meme coins move FAST - 1-minute signals catch momentum before it's over
+     - **Risk management**: Still protected by MH filter, immediate trailing stops, 1-min monitoring
+   - **User Decision**: Confirmed keeping 1-minute candles for token signals (more aggressive, better for volatile meme coins)
+   - **Impact**: Documentation now accurate, no code behavior changes
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.10.2 entry with clarification of multi-timeframe strategy
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Deployed - comments corrected, strategy clarified
+
+### 📊 Current Strategy Configuration (v2.10.2)
 
 **Entry Conditions (Enhanced)**:
 - **Momentum-Adjusted Market Health Index > 0** (v2.10.0: Raw MH + momentum × 2.0)
@@ -978,8 +1010,9 @@ git status --ignored | grep .env  # Verify .env ignored
   - Prevents buying into declining markets (death spiral detection)
   - Enables buying during recoveries (positive momentum from negative MH)
   - Both raw and adjusted MH shown in logs and Telegram for transparency
-- Golden Cross: SMA(12) > SMA(26) ✅ **PRIMARY SIGNAL**
-- ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins)
+- Golden Cross: SMA(12) > SMA(26) on **1-minute candles** (12/26 min lookback) ✅ **PRIMARY SIGNAL**
+  - v2.10.2: Ultra-fast entry timing for volatile meme coins
+- ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins, calculated on 1-min candles)
 - **Filter**: SMA slope > 0.1% (trend strength)
 - **Filter**: Volatility < 5% (market stability)
 
