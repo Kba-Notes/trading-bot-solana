@@ -225,7 +225,8 @@ interface TradeDetails {
 
 // Interface for analysis cycle notifications
 interface AnalysisUpdate {
-    marketHealth: number;
+    marketHealth: number; // Adjusted MH (with momentum)
+    rawMarketHealth?: number; // Optional: Raw MH before momentum adjustment
     assetsAnalyzed: number;
     buySignals: number;
     openPositions: number;
@@ -327,10 +328,18 @@ export async function sendTradeNotification(details: TradeDetails) {
  */
 export async function sendAnalysisSummary(update: AnalysisUpdate) {
     const healthIcon = update.marketHealth > 0 ? '🟢' : '🔴';
+
+    // Show both raw and adjusted MH if momentum is enabled
+    let healthText = `${healthIcon} *Market Health:* \`${update.marketHealth.toFixed(2)}%\``;
+    if (update.rawMarketHealth !== undefined) {
+        const adjustment = update.marketHealth - update.rawMarketHealth;
+        healthText += `\n   📈 _Raw: ${update.rawMarketHealth.toFixed(2)}% | Momentum adj: ${adjustment > 0 ? '+' : ''}${adjustment.toFixed(2)}_`;
+    }
+
     const message = `
 📊 *Analysis Cycle #${update.cycleNumber}*
 
-${healthIcon} *Market Health:* \`${update.marketHealth.toFixed(2)}%\`
+${healthText}
 🔍 *Assets Analyzed:* \`${update.assetsAnalyzed}\`
 📈 *Buy Signals:* \`${update.buySignals}\`
 💼 *Open Positions:* \`${update.openPositions}\`

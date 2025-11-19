@@ -23,7 +23,7 @@ let executionCycleCounter = 0;
 let latestMarketHealth = 0; // Store latest market health for dynamic trailing stops
 
 // Momentum-based Market Health adjustment (v2.10.0)
-const MH_HISTORY_SIZE = 4; // Track last 4 periods (20 minutes)
+const MH_HISTORY_SIZE = 2; // Track last 2 periods (10 minutes) - optimal from backtesting
 const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impact from backtesting)
 const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
 
@@ -81,15 +81,15 @@ function getAdjustedMarketHealth(rawMH: number): number {
     const momentum = calculateMHMomentum();
     const adjustedMH = rawMH + (momentum * MOMENTUM_WEIGHT);
 
-    // Log significant momentum adjustments
-    if (Math.abs(momentum) > 0.05 || Math.abs(adjustedMH - rawMH) > 0.1) {
-        logger.info(`📊 MH Momentum Adjustment: ${rawMH.toFixed(2)} → ${adjustedMH.toFixed(2)} (momentum: ${momentum > 0 ? '+' : ''}${momentum.toFixed(2)}, weight: ${MOMENTUM_WEIGHT})`);
+    // Always log momentum adjustment (show both raw and adjusted)
+    const adjustment = adjustedMH - rawMH;
+    logger.info(`📊 Market Health: Raw=${rawMH.toFixed(2)} | Momentum=${momentum > 0 ? '+' : ''}${momentum.toFixed(3)} | Adjusted=${adjustedMH.toFixed(2)} (${adjustment > 0 ? '+' : ''}${adjustment.toFixed(2)} from momentum)`);
 
-        if (momentum < -0.15) {
-            logger.warn(`⚠️  Negative momentum detected (${momentum.toFixed(2)}) - market declining`);
-        } else if (momentum > 0.15) {
-            logger.info(`✅ Positive momentum detected (${momentum.toFixed(2)}) - market recovering`);
-        }
+    // Warn on significant trends
+    if (momentum < -0.15) {
+        logger.warn(`⚠️  Strong negative momentum (${momentum.toFixed(2)}) - market declining, buy signals suppressed`);
+    } else if (momentum > 0.15) {
+        logger.info(`✅ Strong positive momentum (${momentum.toFixed(2)}) - market recovering, recovery opportunities enabled`);
     }
 
     return adjustedMH;
@@ -418,6 +418,7 @@ async function main() {
                 const openPositions = getOpenPositions();
                 await sendAnalysisSummary({
                     marketHealth: adjustedMarketHealth,
+                    rawMarketHealth: rawMarketHealth, // Show both raw and adjusted
                     assetsAnalyzed: assetsToTrade.length,
                     buySignals,
                     openPositions: openPositions.length,

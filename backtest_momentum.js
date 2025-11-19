@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Configuration
 const MOMENTUM_WEIGHTS = [0.3, 0.5, 1.0, 2.0];
-const MOMENTUM_PERIODS = 4; // Look back 4 periods (20 minutes)
+const MOMENTUM_PERIODS_TO_TEST = [2, 3, 4, 5, 6]; // Test different lookback periods
 const MH_BUY_THRESHOLD = 0; // Current threshold
 
 class BacktestAnalyzer {
@@ -49,12 +49,12 @@ class BacktestAnalyzer {
     }
 
     // Calculate momentum from last N periods
-    calculateMomentum(index) {
-        if (index < MOMENTUM_PERIODS) {
+    calculateMomentum(index, periods = 4) {
+        if (index < periods) {
             return 0; // Not enough history
         }
 
-        const recentMH = this.mhHistory.slice(index - MOMENTUM_PERIODS, index);
+        const recentMH = this.mhHistory.slice(index - periods, index);
         let totalChange = 0;
 
         for (let i = 1; i < recentMH.length; i++) {
@@ -128,9 +128,10 @@ class BacktestAnalyzer {
     }
 
     // Simulate trading with momentum-adjusted MH
-    simulateWithMomentum(weight) {
+    simulateWithMomentum(weight, periods = 4) {
         const results = {
             weight,
+            periods,
             buySignalsGenerated: 0,
             buySignalsSuppressed: 0, // Would have bought, but momentum says no
             buySignalsCreated: 0, // Wouldn't have bought, but momentum says yes
@@ -139,9 +140,9 @@ class BacktestAnalyzer {
             criticalAvoidance: [] // Cases where negative momentum prevented buy into crash
         };
 
-        for (let i = MOMENTUM_PERIODS; i < this.mhHistory.length; i++) {
+        for (let i = periods; i < this.mhHistory.length; i++) {
             const current = this.mhHistory[i];
-            const momentum = this.calculateMomentum(i);
+            const momentum = this.calculateMomentum(i, periods);
             const adjustedMH = current.mh + (momentum * weight);
 
             // Check if this would change buy decision
@@ -151,10 +152,10 @@ class BacktestAnalyzer {
             if (wouldBuyOriginal && !wouldBuyAdjusted) {
                 results.buySignalsSuppressed++;
 
-                // Check if this was avoiding a crash (MH drops in next 4 periods)
-                if (i + MOMENTUM_PERIODS < this.mhHistory.length) {
-                    const futureAvg = this.mhHistory.slice(i + 1, i + MOMENTUM_PERIODS + 1)
-                        .reduce((sum, mh) => sum + mh.mh, 0) / MOMENTUM_PERIODS;
+                // Check if this was avoiding a crash (MH drops in next N periods)
+                if (i + periods < this.mhHistory.length) {
+                    const futureAvg = this.mhHistory.slice(i + 1, i + periods + 1)
+                        .reduce((sum, mh) => sum + mh.mh, 0) / periods;
 
                     if (futureAvg < current.mh - 0.3) {
                         results.criticalAvoidance.push({
@@ -200,7 +201,7 @@ class BacktestAnalyzer {
     }
 
     // Analyze real cases from history
-    analyzeRealCases() {
+    analyzeRealCases(periods = 4) {
         console.log('🔍 ANALYZING REAL HISTORICAL CASES\n');
         console.log('=' .repeat(80) + '\n');
 
@@ -210,12 +211,12 @@ class BacktestAnalyzer {
             stableConditions: []
         };
 
-        for (let i = MOMENTUM_PERIODS; i < this.mhHistory.length - MOMENTUM_PERIODS; i++) {
+        for (let i = periods; i < this.mhHistory.length - periods; i++) {
             const current = this.mhHistory[i];
-            const momentum = this.calculateMomentum(i);
+            const momentum = this.calculateMomentum(i, periods);
 
-            // Look ahead 4 periods
-            const future = this.mhHistory.slice(i + 1, i + MOMENTUM_PERIODS + 1);
+            // Look ahead N periods
+            const future = this.mhHistory.slice(i + 1, i + periods + 1);
             const futureChange = future.length > 0
                 ? future[future.length - 1].mh - current.mh
                 : 0;
@@ -279,11 +280,36 @@ class BacktestAnalyzer {
         const realCases = this.analyzeRealCases();
 
         console.log('\n' + '='.repeat(80) + '\n');
-        console.log('🧪 BACKTESTING MOMENTUM-ADJUSTED MH STRATEGY\n');
+        console.log('🧪 BACKTESTING: FINDING OPTIMAL PERIOD LENGTH\n');
+
+        // First, test different period lengths with weight 2.0
+        console.log('Testing different lookback periods (with weight 2.0):\n');
+        let bestPeriod = 4;
+        let bestPeriodScore = 0;
+
+        for (const periods of MOMENTUM_PERIODS_TO_TEST) {
+            const result = this.simulateWithMomentum(2.0, periods);
+            const score = result.criticalAvoidance.length * 3 + result.buySignalsCreated;
+
+            console.log(`📊 Periods = ${periods} (${periods * 5} minutes lookback)`);
+            console.log(`   Crashes prevented: ${result.criticalAvoidance.length}`);
+            console.log(`   Recovery opportunities: ${result.buySignalsCreated}`);
+            console.log(`   Score: ${score}\n`);
+
+            if (score > bestPeriodScore) {
+                bestPeriodScore = score;
+                bestPeriod = periods;
+            }
+        }
+
+        console.log(`✅ **Optimal Period: ${bestPeriod} (${bestPeriod * 5} minutes lookback)**\n`);
+
+        console.log('\n' + '='.repeat(80) + '\n');
+        console.log(`🧪 BACKTESTING WITH OPTIMAL PERIOD (${bestPeriod})\n`);
 
         const results = [];
         for (const weight of MOMENTUM_WEIGHTS) {
-            const result = this.simulateWithMomentum(weight);
+            const result = this.simulateWithMomentum(weight, bestPeriod);
             results.push(result);
 
             console.log(`\n📊 Weight = ${weight.toFixed(1)} (${weight * 100}% momentum impact)`);
