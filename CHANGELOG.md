@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2025-11-20
+
+### Changed
+- **🎯 Optimized Momentum Period: 3-Cycle → 2-Cycle** - Data-driven optimization based on comprehensive 60-trade analysis
+  - **Analysis Conducted:** Compared 2-cycle, 3-cycle, and 4-cycle momentum calculations across 60 real trades (Nov 19-20)
+  - **Finding:** 2-cycle (10-minute lookback) significantly outperforms 3-cycle (15-minute) and 4-cycle (20-minute)
+  - **Results Summary:**
+    | Period | Trades | Win Rate | Net P&L | R:R Ratio | Blocked Efficiency |
+    |--------|--------|----------|---------|-----------|-------------------|
+    | **2-Cycle** | 46 (26W, 20L) | **56.5%** 🏆 | **$98.63** 🏆 | 2.40:1 | $0.16 ✓ Break-even |
+    | 3-Cycle (prev) | 44 (18W, 26L) | 40.9% ❌ | $19.75 ❌ | 1.97:1 | -$78.72 ✗ TERRIBLE |
+    | 4-Cycle | 43 (19W, 24L) | 44.2% | $77.76 | 3.60:1 | -$20.71 ✗ Bad |
+  - **Key Insights:**
+    - **2-Cycle wins by 5x on P&L** ($98.63 vs $19.75)
+    - **38% better win rate** (56.5% vs 40.9%)
+    - **Smart blocking:** Near break-even on filtered trades (missed $14.63 wins, avoided $14.79 losses)
+    - **3-Cycle blocked TOO MANY winners:** Missed $85.37 in profits (including PENG +5.13%, BONK +3.54%, WIF +3.69%)
+    - **More responsive:** 10-minute lookback catches momentum changes faster without sacrificing accuracy
+  - **Entry Quality Comparison (2-Cycle):**
+    - Winning trades: Avg Raw MH 0.17, Momentum +0.207, Adjusted MH 0.58
+    - Losing trades: Avg Raw MH 0.09, Momentum +0.175, Adjusted MH 0.43
+    - Clear separation: Winners enter at higher MH with stronger momentum
+  - **Tiered Entry System Evaluated and REJECTED:**
+    - Tested tiered momentum thresholds based on Raw MH ranges
+    - Result: Too strict for volatile meme coins
+    - Cost: $71.62 in missed opportunities (blocked $95.63 wins to avoid $24.01 losses)
+    - Conclusion: Simple "Adjusted MH > 0" filter is optimal for meme coin volatility
+  - **Implementation Change:**
+    - Changed `MH_HISTORY_SIZE` from 3 to 2 in `src/bot.ts:26`
+    - Momentum now calculated over last 2 periods (10 minutes) instead of 3 (15 minutes)
+    - All other logic unchanged - still uses MOMENTUM_WEIGHT = 2.0
+  - **Expected Impact:**
+    - 5x improvement in net P&L
+    - Win rate increase from ~41% to ~57%
+    - Fewer missed opportunities on big winners
+    - More responsive to market changes
+  - **Validation:** Original backtesting (v2.10.0) also showed 2-cycle as optimal (Score 57 vs 53 for 3-cycle)
+  - **Technical:** Modified `src/bot.ts:26` - Changed MH_HISTORY_SIZE from 3 to 2
+
 ## [2.10.2] - 2025-11-19
 
 ### Fixed

@@ -22,8 +22,8 @@ import { getErrorMessage, getErrorContext } from './errors/custom-errors.js';
 let executionCycleCounter = 0;
 let latestMarketHealth = 0; // Store latest market health for dynamic trailing stops
 
-// Momentum-based Market Health adjustment (v2.10.0)
-const MH_HISTORY_SIZE = 3; // Track last 3 periods (15 minutes) - balanced approach
+// Momentum-based Market Health adjustment (v2.11.0: Optimized to 2-cycle)
+const MH_HISTORY_SIZE = 2; // Track last 2 periods (10 minutes) - optimal from 60-trade analysis
 const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impact from backtesting)
 const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
 
