@@ -117,7 +117,7 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
 
         const rawTransaction = transaction.serialize();
         const txid = await connection.sendRawTransaction(rawTransaction, {
-            skipPreflight: false,
+            skipPreflight: true,  // Skip simulation to prevent blockhash expiration (Jupiter validates server-side)
             maxRetries: 3,
         });
 
@@ -265,11 +265,27 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             return await executeBuyOrder(assetMint, amountUSDC, price, retryCount + 1);
         } else {
-            // All retries exhausted - try Helius fallback as last resort
+            // All retries exhausted - try Helius fallback with retries
             const heliusRpcUrl = process.env.HELIUS_RPC_URL;
             if (heliusRpcUrl) {
-                logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC...`);
-                const heliusSuccess = await performJupiterSwap(USDC_MINT, assetMint, amountInSmallestUnit, true, heliusRpcUrl);
+                logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC (up to 3 attempts)...`);
+                let heliusSuccess = false;
+
+                // Try Helius fallback up to 3 times
+                for (let i = 0; i < 3; i++) {
+                    logger.info(`🔄 Helius attempt ${i + 1}/3 for ${assetName}`);
+                    heliusSuccess = await performJupiterSwap(USDC_MINT, assetMint, amountInSmallestUnit, true, heliusRpcUrl);
+
+                    if (heliusSuccess) {
+                        break; // Success, exit retry loop
+                    }
+
+                    if (i < 2) { // Don't delay after last attempt
+                        const delay = 3000 * (i + 1); // 3s, 6s
+                        logger.warn(`❌ Helius attempt ${i + 1} failed. Retrying in ${delay / 1000}s...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
 
                 if (heliusSuccess) {
                     logger.info(`✅ Helius fallback successful for ${assetName}!`);
@@ -411,11 +427,27 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
                 return await executeSellOrder(position, retryCount + 1);
             } else {
-                // All retries exhausted - try Helius fallback as last resort
+                // All retries exhausted - try Helius fallback with retries
                 const heliusRpcUrl = process.env.HELIUS_RPC_URL;
                 if (heliusRpcUrl) {
-                    logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC...`);
-                    const heliusSuccess = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false, heliusRpcUrl);
+                    logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC (up to 3 attempts)...`);
+                    let heliusSuccess = false;
+
+                    // Try Helius fallback up to 3 times
+                    for (let i = 0; i < 3; i++) {
+                        logger.info(`🔄 Helius attempt ${i + 1}/3 for ${assetName}`);
+                        heliusSuccess = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false, heliusRpcUrl);
+
+                        if (heliusSuccess) {
+                            break; // Success, exit retry loop
+                        }
+
+                        if (i < 2) { // Don't delay after last attempt
+                            const delay = 3000 * (i + 1); // 3s, 6s
+                            logger.warn(`❌ Helius attempt ${i + 1} failed. Retrying in ${delay / 1000}s...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
 
                     if (heliusSuccess) {
                         logger.info(`✅ Helius fallback successful for ${assetName}!`);

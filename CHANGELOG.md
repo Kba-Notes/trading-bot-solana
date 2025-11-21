@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.2] - 2025-11-21
+
+### Fixed
+- **🔧 Helius Fallback Reliability Improvements** - Critical fixes to ensure backup RPC works during outages
+  - **Problem Identified:** WIF buy failure at 10:30:48 with both default RPC and Helius fallback
+    - Default RPC failed 4 times as expected
+    - Helius fallback attempted but ALSO failed
+    - Error: "Transaction simulation failed: Blockhash not found"
+    - Result: Missed buy opportunity despite having backup RPC
+  - **Root Cause Analysis:**
+    1. **skipPreflight setting**: Using `skipPreflight: false` caused transaction simulation
+       - Simulation takes time, causing blockhash to expire before actual submission
+       - Expired blockhash → "Blockhash not found" error
+       - Jupiter validates transactions server-side, so client-side simulation unnecessary
+    2. **Single retry attempt**: Helius fallback only tried ONCE
+       - If that single attempt had expired blockhash, no recovery
+       - No retry loop for fallback RPC
+  - **Solutions Implemented:**
+    1. **skipPreflight: false → true** (line 120 in trader.ts)
+       - Skip client-side simulation to prevent blockhash expiration
+       - Jupiter performs server-side validation anyway
+       - Faster transaction submission = fresher blockhash
+    2. **Added 3-retry loop to Helius fallback** (buy & sell operations)
+       - Helius fallback now attempts up to 3 times before giving up
+       - Progressive delays: 3s, 6s between attempts
+       - Implemented in both `executeBuyOrder()` (lines 268-310) and `executeSellOrder()` (lines 430-470)
+       - Clear logging: "Helius attempt 1/3", "Helius attempt 2/3", "Helius attempt 3/3"
+  - **How It Works Now:**
+    ```
+    Default RPC: Attempt 1 → 2 → 3 → 4 (all fail)
+                                      ↓
+                         Helius Fallback Attempt 1 (skip simulation)
+                                      ↓ (fail, 3s delay)
+                         Helius Fallback Attempt 2 (skip simulation)
+                                      ↓ (fail, 6s delay)
+                         Helius Fallback Attempt 3 (skip simulation)
+                                      ↓
+                                   Success! ✅
+    ```
+  - **Expected Impact:**
+    - Much higher success rate during RPC outages
+    - Helius fallback now has 3 chances to succeed instead of 1
+    - Faster transaction submission reduces blockhash expiration risk
+    - Better capital deployment during network congestion
+  - **Helius RPC Verified:** Tested connection to Helius mainnet RPC - confirmed working
+  - **Technical:** Modified `src/order_executor/trader.ts` - Changed skipPreflight setting, added retry loops
+
 ## [2.11.1] - 2025-11-21
 
 ### Added
