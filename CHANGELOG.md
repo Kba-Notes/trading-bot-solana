@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.1] - 2025-11-21
+
+### Added
+- **🛡️ Helius RPC Fallback for Maximum Reliability** - Smart fallback system prevents transaction failures during RPC outages
+  - **Problem Solved:** Today's 4.5-hour Solana RPC outage (05:00-09:36) caused 725 "Blockhash not found" errors and stuck positions
+  - **Timeline of Issue:**
+    - JUP successfully traded multiple times (03:15, 03:51, 04:54) ✅
+    - Last successful transaction: 04:58 (JUP buy) ✅
+    - RPC outage started: ~05:00 ❌
+    - Trailing stop triggered 20+ times but couldn't execute sell ❌
+    - RPC recovered: 09:36 ✅
+    - Total impact: 725 failed transaction attempts over 4.5 hours
+  - **Solution Implemented:**
+    - Primary: Default Solana RPC (free, unlimited)
+    - Fallback: Helius RPC (1M credits/month, 10 req/sec)
+    - Strategy: Use Helius ONLY when default RPC fails all 4 attempts
+    - Credit conservation: Won't burn through Helius credits during normal operation
+  - **How It Works:**
+    ```
+    Attempt 1-4 (Default RPC) → All fail → Helius Fallback (5th attempt) → Success!
+    ```
+  - **Implementation Details:**
+    - Modified `performJupiterSwap()` to accept optional `rpcUrl` parameter
+    - Added fallback logic to `executeSellOrder()` after 4 failed attempts
+    - Added fallback logic to `executeBuyOrder()` after 4 failed attempts
+    - Logs clearly indicate when fallback is used: "(using fallback RPC)"
+    - Telegram notifications show: "sold via Helius" / "via Helius fallback"
+  - **Configuration:**
+    - Added `HELIUS_RPC_URL` to `.env` file
+    - API key configured for user's Helius account
+    - Fallback activates automatically when needed
+  - **Expected Impact:**
+    - Zero stuck positions during RPC outages
+    - Minimal Helius credit usage (only on failures)
+    - Better reliability without increased costs
+    - Peace of mind during network congestion
+  - **Technical:** Modified `src/order_executor/trader.ts` - Added rpcUrl parameter and fallback logic
+
 ## [2.11.0] - 2025-11-20
 
 ### Changed

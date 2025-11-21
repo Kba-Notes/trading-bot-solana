@@ -56,8 +56,9 @@ export function getOpenPositions(): OpenPosition[] {
     return openPositions;
 }
 
-async function performJupiterSwap(inputMint: string, outputMint: string, amount: number, isBuy: boolean) {
-    logger.info(`Starting real SWAP. Input: ${inputMint}, Output: ${outputMint}, Amount (smallest unit): ${amount}`);
+async function performJupiterSwap(inputMint: string, outputMint: string, amount: number, isBuy: boolean, rpcUrl?: string) {
+    const actualRpcUrl = rpcUrl || 'https://api.mainnet-beta.solana.com';
+    logger.info(`Starting real SWAP. Input: ${inputMint}, Output: ${outputMint}, Amount (smallest unit): ${amount}${rpcUrl ? ' (using fallback RPC)' : ''}`);
 
     const privateKey = process.env.PRIVATE_KEY;
     if (!privateKey) {
@@ -66,7 +67,7 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
         return false;
     }
     const wallet = Keypair.fromSecretKey(bs58.decode(privateKey));
-    const connection = new Connection('https://api.mainnet-beta.solana.com');
+    const connection = new Connection(actualRpcUrl);
 
     try {
         logger.info('1. Getting Jupiter quote...');
@@ -264,8 +265,49 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             return await executeBuyOrder(assetMint, amountUSDC, price, retryCount + 1);
         } else {
-            logger.error(`❌ All ${MAX_RETRIES + 1} buy attempts failed for ${assetName}.`);
-            sendMessage(`⚠️ *CRITICAL: Failed to buy ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts failed. No position opened.\n\nAsset: ${assetName}\nIntended Entry: $${price.toFixed(6)}\nAmount: ${amountUSDC} USDC`);
+            // All retries exhausted - try Helius fallback as last resort
+            const heliusRpcUrl = process.env.HELIUS_RPC_URL;
+            if (heliusRpcUrl) {
+                logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC...`);
+                const heliusSuccess = await performJupiterSwap(USDC_MINT, assetMint, amountInSmallestUnit, true, heliusRpcUrl);
+
+                if (heliusSuccess) {
+                    logger.info(`✅ Helius fallback successful for ${assetName}!`);
+
+                    // Get current market health to set initial trailing stop
+                    const currentMarketHealth = getLatestMarketHealth();
+                    const trailingStopPercent = getDynamicTrailingStop(currentMarketHealth);
+
+                    const position: OpenPosition = {
+                        id: nextPositionId++,
+                        asset: assetMint,
+                        entryPrice: price,
+                        amount: amountUSDC,
+                        timestamp: new Date(),
+                        trailingStopActive: true,
+                        highestPrice: price
+                    };
+                    openPositions.push(position);
+
+                    logger.info(`🔒 Trailing stop activated immediately for ${assetName} at entry ($${price.toFixed(8)}) with ${(trailingStopPercent * 100).toFixed(1)}% trail (MH=${currentMarketHealth.toFixed(2)})`);
+
+                    await savePositions(openPositions);
+
+                    sendTradeNotification({
+                        asset: assetName,
+                        action: 'BUY',
+                        price: price,
+                        amount: amountUSDC,
+                        reason: 'Strategy signal confirmed (via Helius fallback).',
+                        indicators: {}
+                    });
+
+                    return true;
+                }
+            }
+
+            logger.error(`❌ All attempts failed for ${assetName} (including Helius fallback).`);
+            sendMessage(`⚠️ *CRITICAL: Failed to buy ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts + Helius fallback failed. No position opened.\n\nAsset: ${assetName}\nIntended Entry: $${price.toFixed(6)}\nAmount: ${amountUSDC} USDC`);
             return false;
         }
     }
@@ -369,8 +411,37 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
                 return await executeSellOrder(position, retryCount + 1);
             } else {
-                logger.error(`❌ All ${MAX_RETRIES + 1} sell attempts failed for ${assetName}. Position remains open.`);
-                sendMessage(`⚠️ *CRITICAL: Failed to sell ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts failed. Position remains open. Manual intervention may be required.\n\nPosition: ${assetName}\nEntry: $${position.entryPrice.toFixed(6)}`);
+                // All retries exhausted - try Helius fallback as last resort
+                const heliusRpcUrl = process.env.HELIUS_RPC_URL;
+                if (heliusRpcUrl) {
+                    logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC...`);
+                    const heliusSuccess = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false, heliusRpcUrl);
+
+                    if (heliusSuccess) {
+                        logger.info(`✅ Helius fallback successful for ${assetName}!`);
+                        openPositions = openPositions.filter(p => p.id !== position.id);
+                        await savePositions(openPositions);
+
+                        const currentPrice = await getCurrentPrice(position.asset) || position.entryPrice;
+                        const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
+                        const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+
+                        await sendTradeNotification({
+                            asset: assetName,
+                            action: 'SELL',
+                            price: currentPrice,
+                            entryPrice: position.entryPrice,
+                            pnl: pnl,
+                            percentage: pnlPercent
+                        });
+
+                        logger.info(`💰 ${assetName} sold via Helius: Entry=$${position.entryPrice.toFixed(6)}, Exit=$${currentPrice.toFixed(6)}, P&L=${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}% (${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)})`);
+                        return true;
+                    }
+                }
+
+                logger.error(`❌ All attempts failed for ${assetName} (including Helius fallback). Position remains open.`);
+                sendMessage(`⚠️ *CRITICAL: Failed to sell ${assetName}*\n\nAll ${MAX_RETRIES + 1} attempts + Helius fallback failed. Position remains open. Manual intervention may be required.\n\nPosition: ${assetName}\nEntry: $${position.entryPrice.toFixed(6)}`);
                 return false;
             }
         }
