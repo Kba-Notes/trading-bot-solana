@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.3] - 2025-11-23
+
+### Fixed
+- **💰 Accurate P&L Calculation Based on Actual USDC Received** - P&L now matches Phantom wallet and Solscan exactly
+  - **Problem Identified:** Bot's calculated P&L didn't match actual USDC received in wallet
+    - Example 1: JUP trade - Bot showed +$5.48, but wallet received only $503.76 (+$3.76 actual)
+    - Example 2: PENG trade - Bot showed -$0.35, but wallet received $498.81 (-$1.19 actual)
+    - Example 3: BONK trade - Bot showed -$0.45, but wallet received $499.49 (-$0.51 actual)
+    - **Root Cause:** Previous calculation was purely theoretical based on price difference
+    - Didn't account for swap fees (~0.18% each way), slippage, or actual token amounts received
+  - **Solution:** Check actual USDC balance before and after SELL operation
+    - Get USDC balance immediately before swap
+    - Get USDC balance immediately after swap
+    - Calculate: `USDC received = balanceAfter - balanceBefore`
+    - Calculate: `Actual P&L = (USDC received) - (USDC spent on BUY)`
+    - Works even if wallet has existing USDC (uses difference)
+  - **Implementation:**
+    - Added USDC balance checks in `executeSellOrder()` for both main and Helius RPC paths
+    - Logs show: "USDC balance before sell", "USDC balance after sell", "USDC received from sell"
+    - P&L calculation: `actualPnL = usdcReceived - position.amount` (position.amount = $500 spent)
+    - Telegram notifications now show true profit/loss after all fees
+  - **Benefits:**
+    - ✅ P&L matches Phantom wallet exactly
+    - ✅ P&L matches Solscan transaction details
+    - ✅ Accounts for all swap fees and slippage automatically
+    - ✅ No complex fee tracking needed - just check actual USDC in/out
+    - ✅ Reliable regardless of market conditions or DEX routing
+  - **Technical Changes:**
+    - Modified `executeSellOrder()` in [src/order_executor/trader.ts:390-425](src/order_executor/trader.ts#L390-L425)
+    - Modified Helius fallback path in [src/order_executor/trader.ts:452-492](src/order_executor/trader.ts#L452-L492)
+    - Both paths now calculate actual P&L from real USDC received
+
 ## [2.11.2] - 2025-11-21
 
 ### Fixed

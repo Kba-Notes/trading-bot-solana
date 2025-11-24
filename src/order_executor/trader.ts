@@ -389,6 +389,11 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
 
         logger.info(`🔄 Sell attempt ${retryCount + 1}/${MAX_RETRIES + 1} for ${assetName} (${amountToSell} tokens)`);
 
+        // Get USDC balance before swap to calculate actual P&L
+        const usdcMint = new PublicKey(USDC_MINT);
+        const usdcBalanceBefore = await getTokenBalance(wallet, connection, usdcMint);
+        logger.info(`USDC balance before sell: ${(usdcBalanceBefore / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS)).toFixed(2)} USDC`);
+
         const swapStartTime = Date.now();
         const success = await performJupiterSwap(position.asset, USDC_MINT, amountToSell, false);
         const swapDuration = Date.now() - swapStartTime;
@@ -400,12 +405,23 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
         if (success) {
             // Successfully sold - remove position
             logger.info(`✅ Sell successful for ${assetName} after ${retryCount + 1} attempt(s)`);
+
+            // Get USDC balance after swap to calculate actual P&L
+            const usdcBalanceAfter = await getTokenBalance(wallet, connection, usdcMint);
+            const usdcReceived = (usdcBalanceAfter - usdcBalanceBefore) / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS);
+            logger.info(`USDC balance after sell: ${(usdcBalanceAfter / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS)).toFixed(2)} USDC`);
+            logger.info(`USDC received from sell: ${usdcReceived.toFixed(2)} USDC`);
+
+            // Calculate ACTUAL P&L based on real USDC received vs amount spent
+            const actualPnL = usdcReceived - position.amount;
+            const actualPnLPercent = (actualPnL / position.amount) * 100;
+
             openPositions = openPositions.filter(p => p.id !== position.id);
             await savePositions(openPositions);
 
             const currentPrice = await getCurrentPrice(position.asset) || position.entryPrice;
-            const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
-            const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+            const pnl = actualPnL;
+            const pnlPercent = actualPnLPercent;
 
             await sendTradeNotification({
                 asset: assetName,
@@ -433,6 +449,12 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
                     logger.warn(`🔄 All ${MAX_RETRIES + 1} attempts failed. Trying Helius fallback RPC (up to 3 attempts)...`);
                     let heliusSuccess = false;
 
+                    // Get USDC balance before Helius swap to calculate actual P&L
+                    const heliusConnection = new Connection(heliusRpcUrl);
+                    const usdcMintHelius = new PublicKey(USDC_MINT);
+                    const usdcBalanceBeforeHelius = await getTokenBalance(wallet, heliusConnection, usdcMintHelius);
+                    logger.info(`USDC balance before Helius sell: ${(usdcBalanceBeforeHelius / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS)).toFixed(2)} USDC`);
+
                     // Try Helius fallback up to 3 times
                     for (let i = 0; i < 3; i++) {
                         logger.info(`🔄 Helius attempt ${i + 1}/3 for ${assetName}`);
@@ -451,12 +473,23 @@ export async function executeSellOrder(position: OpenPosition, retryCount: numbe
 
                     if (heliusSuccess) {
                         logger.info(`✅ Helius fallback successful for ${assetName}!`);
+
+                        // Get USDC balance after Helius swap to calculate actual P&L
+                        const usdcBalanceAfterHelius = await getTokenBalance(wallet, heliusConnection, usdcMintHelius);
+                        const usdcReceivedHelius = (usdcBalanceAfterHelius - usdcBalanceBeforeHelius) / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS);
+                        logger.info(`USDC balance after Helius sell: ${(usdcBalanceAfterHelius / Math.pow(10, SOLANA_CONSTANTS.USDC_DECIMALS)).toFixed(2)} USDC`);
+                        logger.info(`USDC received from Helius sell: ${usdcReceivedHelius.toFixed(2)} USDC`);
+
+                        // Calculate ACTUAL P&L based on real USDC received vs amount spent
+                        const actualPnLHelius = usdcReceivedHelius - position.amount;
+                        const actualPnLPercentHelius = (actualPnLHelius / position.amount) * 100;
+
                         openPositions = openPositions.filter(p => p.id !== position.id);
                         await savePositions(openPositions);
 
                         const currentPrice = await getCurrentPrice(position.asset) || position.entryPrice;
-                        const pnl = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
-                        const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+                        const pnl = actualPnLHelius;
+                        const pnlPercent = actualPnLPercentHelius;
 
                         await sendTradeNotification({
                             asset: assetName,
