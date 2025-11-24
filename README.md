@@ -209,9 +209,25 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.9.0
+**Current Version:** 2.11.3
 
-### Latest Updates (v2.9.0)
+### Latest Updates (v2.11.3 - Nov 23, 2025)
+- **💰 Accurate P&L Calculation** - P&L now matches Phantom wallet and Solscan exactly
+  - Fixed discrepancy between bot's reported P&L and actual USDC received
+  - Previous calculation was theoretical (price difference only), ignored fees and slippage
+  - Now checks actual USDC balance before and after SELL operation
+  - Real P&L = (USDC received from sell) - (USDC spent on buy)
+  - Automatically accounts for all swap fees (~0.36% round-trip) and slippage
+  - Transparent logging shows USDC balance changes
+
+### Previous Updates (v2.11.1-v2.11.2)
+- **🛡️ Helius RPC Fallback** - Backup RPC for maximum reliability during outages
+  - Automatic failover when main RPC fails
+  - 3-retry loop for Helius fallback (higher success rate)
+  - skipPreflight optimization to prevent blockhash expiration
+  - Production-grade reliability for trade execution
+
+### Previous Updates (v2.9.0)
 - **Timeframe Optimization: 1-hour → 5-minute candles** - Ultra-responsive for meme coin pumps
   - 5-minute candles with 5-minute analysis cycles (288 checks/day)
   - SMA(12) = 1 hour of data, SMA(26) = 2.2 hours of data
