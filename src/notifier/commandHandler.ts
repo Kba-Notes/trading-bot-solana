@@ -1,6 +1,6 @@
 // src/notifier/commandHandler.ts
 import { logger, bot, chatId } from '../services.js';
-import { getOpenPositions } from '../order_executor/trader.js';
+import { getOpenPositions, executeSellOrder } from '../order_executor/trader.js';
 import { getCurrentPrice } from '../data_extractor/jupiter.js';
 import { assetsToTrade } from '../config.js';
 import { getLatestMarketHealth } from '../bot.js';
@@ -187,6 +187,72 @@ export function initializeCommandHandlers(): void {
         }
     });
 
+    // /sell command - manually sell a position
+    bot.onText(/^\/sell\s+([A-Za-z0-9]+)$/i, async (msg, match) => {
+        // Only respond to authorized chat
+        if (msg.chat.id.toString() !== chatId) {
+            logger.warn(`Unauthorized command attempt from chat ID: ${msg.chat.id}`);
+            return;
+        }
+
+        if (!match || !match[1]) {
+            bot?.sendMessage(chatId, '⚠️ Invalid format.\n\nUsage: `/sell <TOKEN>`\nExample: `/sell JUP`', { parse_mode: 'Markdown' });
+            return;
+        }
+
+        const tokenName = match[1].toUpperCase();
+        logger.info(`Received /sell command from user for token: ${tokenName}`);
+
+        try {
+            // Find the asset configuration
+            const assetConfig = assetsToTrade.find(a => a.name.toUpperCase() === tokenName);
+            if (!assetConfig) {
+                const availableTokens = assetsToTrade.map(a => a.name).join(', ');
+                bot?.sendMessage(chatId, `⚠️ Unknown token: *${tokenName}*\n\nAvailable tokens: ${availableTokens}`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Find the open position
+            const positions = getOpenPositions();
+            const position = positions.find(p => p.asset === assetConfig.mint);
+
+            if (!position) {
+                bot?.sendMessage(chatId, `⚠️ No open position found for *${tokenName}*\n\nUse \`/status\` to see current positions.`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Get current price for confirmation message
+            const currentPrice = await getCurrentPrice(position.asset);
+            if (!currentPrice) {
+                bot?.sendMessage(chatId, `❌ Failed to get current price for *${tokenName}*. Cannot execute manual sell.`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            const decimals = currentPrice < 0.01 ? 8 : 6;
+            const pnlPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+            const pnlUSDC = (currentPrice - position.entryPrice) * (position.amount / position.entryPrice);
+            const pnlSign = pnlPercent >= 0 ? '+' : '';
+
+            // Send confirmation that sell is being executed
+            bot?.sendMessage(chatId, `🔄 *Manual Sell Initiated*\n\nToken: ${tokenName}\nEntry: $${position.entryPrice.toFixed(decimals)}\nCurrent: $${currentPrice.toFixed(decimals)}\nEstimated P&L: ${pnlSign}${pnlPercent.toFixed(2)}% (${pnlSign}$${pnlUSDC.toFixed(2)})\n\n_Executing sell order..._`, { parse_mode: 'Markdown' });
+
+            // Execute the sell order
+            logger.info(`Executing manual sell order for ${tokenName} (position ID: ${position.id})`);
+            const success = await executeSellOrder(position);
+
+            if (success) {
+                logger.info(`✅ Manual sell order completed successfully for ${tokenName}`);
+                // Note: executeSellOrder already sends trade notification
+            } else {
+                logger.error(`❌ Manual sell order failed for ${tokenName}`);
+                bot?.sendMessage(chatId, `❌ *Manual Sell Failed*\n\nToken: ${tokenName}\n\nPlease check logs for details. The position may still be open.`, { parse_mode: 'Markdown' });
+            }
+        } catch (error) {
+            logger.error('Error handling /sell command:', error);
+            bot?.sendMessage(chatId, '❌ Error executing manual sell. Check bot logs for details.');
+        }
+    });
+
     // /help command - shows available commands
     bot.onText(/^\/help$/, (msg) => {
         // Only respond to authorized chat
@@ -209,6 +275,11 @@ export function initializeCommandHandlers(): void {
   • Shows all open positions
   • Displays P&L, entry/current prices
   • Shows trailing stop info
+
+💰 */sell <TOKEN>* - Manually sell a position
+  • \`/sell JUP\` - Sell open JUP position
+  • \`/sell WIF\` - Sell open WIF position
+  • Shows current P&L before executing
 
 ❓ */help* - Show this help message
 

@@ -39,6 +39,7 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 - **Interactive Telegram Commands:**
   - `/logs [minutes]` - Get recent logs on-demand (1-60 minutes, default 1)
   - `/status` - Get instant position snapshot with real-time P&L
+  - `/sell <TOKEN>` - Manually sell an open position (e.g., `/sell JUP`)
   - `/help` - Show available commands
   - Chat ID verification for security
 - **Performance Metrics:** Tracks API success rates, execution times, and uptime
@@ -209,9 +210,24 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.12.2
+**Current Version:** 2.12.3
 
-### Latest Updates (v2.12.2 - Nov 26, 2025)
+### Latest Updates (v2.12.3 - Nov 26, 2025)
+- **💰 Manual Sell Command** - New `/sell <TOKEN>` command for on-demand position selling
+  - Usage: `/sell JUP`, `/sell WIF`, `/sell PENG`, `/sell BONK`
+  - Shows pre-sell confirmation with P&L estimate
+  - Full retry logic and Helius fallback support
+  - Sends standard notification with actual P&L
+- **🔔 Missing Notification Fix** - Guaranteed notifications even when balance checks fail
+  - Fixed: Swap succeeds but 429 error prevents notification
+  - Solution: Wrapped balance check in try-catch with estimated P&L fallback
+  - Now always sends notification when swap succeeds
+- **🔄 Balance Check Retry Logic** - Added 4-attempt retry with exponential backoff
+  - Problem: `getTokenBalance()` had no error handling
+  - Solution: 2s → 4s → 8s delays for rate limit errors
+  - Significantly reduced RPC-related failures
+
+### Previous Updates (v2.12.2 - Nov 26, 2025)
 - **🎯 Switched to Jupiter Real-Time Prices for Momentum** - Fixed stale GeckoTerminal data issue
   - **Problem**: GeckoTerminal 1-min candles were cached, showing identical values for 3+ minutes
   - **Solution**: Switched to Jupiter real-time prices for momentum calculation

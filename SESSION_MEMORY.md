@@ -1573,4 +1573,115 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ---
 
+## Entry 47: v2.12.3 - Manual Sell Command + Notification Bug Fix + Balance Check Retry Logic (Nov 26, 2025)
+
+**Context**: User requested manual sell command via Telegram, then discovered notification bug during manual PENG sell.
+
+### Part 1: Manual Sell Command Implementation
+
+**User Request**: *"please implement a command for telegram "/sell +tokenname" with which I can order a manual sell of a currently open position"*
+
+**Implementation**:
+- Added `/sell <TOKEN>` command to Telegram command handler
+- Validates token name against configured assets
+- Finds open position for the specified token
+- Shows pre-sell confirmation with entry, current price, and estimated P&L
+- Executes sell using existing `executeSellOrder()` function (full retry logic included)
+- Sends success/failure feedback
+
+**Files Modified**:
+- `src/notifier/commandHandler.ts` lines 3, 190-254: Added `/sell` command handler
+- `src/notifier/commandHandler.ts` lines 279-282: Updated `/help` to include `/sell` command
+
+**Benefits**:
+- Manual intervention capability for any open position
+- Clear feedback before and after execution
+- Uses same reliable sell logic as automated sells
+- Helpful for emergency exits or testing
+
+---
+
+### Part 2: Missing Notification Bug Fix
+
+**Problem Discovered**: User manually sold PENG at 17:48, swap succeeded but no Telegram notification received
+
+**Timeline Analysis**:
+- 17:48:41 - Swap succeeded ✅ (Transaction: 4296iY...qgFx)
+- 17:48:49 - RPC 429 error when checking USDC balance after swap
+- 17:49:02 - Retry 2 failed with 429 error
+- 17:49:12 - Detected no token balance (already sold), exited without notification ❌
+
+**Root Cause**:
+- When swap succeeds but post-swap `getTokenBalance()` call throws 429 error
+- Exception propagates up, bypassing notification code at line 426
+- Position removed but user never notified
+
+**Solution**: Wrapped balance check in try-catch with fallback
+- Try to get actual USDC balance after swap
+- If succeeds → Calculate actual P&L from real USDC received
+- If fails → Use estimated P&L based on current price
+- **Always** send notification regardless of balance check outcome
+- **Always** remove position (swap already succeeded)
+
+**Files Modified**:
+- `src/order_executor/trader.ts` lines 414-433: Main RPC path with try-catch
+- `src/order_executor/trader.ts` lines 498-517: Helius fallback path with try-catch
+
+**Expected Impact**:
+- User always receives notification when swap succeeds
+- Falls back to estimated P&L if balance check fails
+- More transparent (logs show "Using estimated P&L")
+
+---
+
+### Part 3: Balance Check Retry Logic
+
+**User Feedback**: *"please check the balance check mechanism, as I think something is not right and the RPC call fails"*
+
+**Problem Identified**: `getTokenBalance()` function had **zero** error handling
+- Single call to `connection.getParsedTokenAccountsByOwner()`
+- No retry logic
+- No backoff delays
+- Threw immediately on 429 or any RPC error
+- Caused cascading failures in sell operations
+
+**Solution**: Added comprehensive retry logic with exponential backoff
+- **4 total attempts** (initial + 3 retries)
+- **Rate limit errors (429)**:
+  - Attempt 1: Immediate
+  - Attempt 2: 2s delay
+  - Attempt 3: 4s delay
+  - Attempt 4: 8s delay (capped)
+- **Other errors**:
+  - Attempt 1: Immediate
+  - Attempt 2: 1s delay
+  - Attempt 3: 2s delay
+  - Attempt 4: 3s delay
+- Clear logging showing attempt numbers and retry delays
+- Only throws after all 4 attempts exhausted
+
+**Files Modified**:
+- `src/order_executor/trader.ts` lines 332-362: Complete rewrite of `getTokenBalance()` with retry logic
+
+**Expected Impact**:
+- Significantly reduced balance check failures
+- Better handling of temporary RPC congestion
+- More reliable actual P&L calculation
+- Fewer fallbacks to estimated P&L
+- Smoother operation during high RPC load
+
+---
+
+**Combined Benefits of v2.12.3**:
+- ✅ Manual control via `/sell` command
+- ✅ Guaranteed notifications even during RPC issues
+- ✅ Robust balance checking with 4-attempt retry
+- ✅ Fallback to estimated P&L when needed
+- ✅ Better logging and user feedback
+- ✅ Production-grade reliability
+
+**Status**: ✅ Complete - v2.12.3 deployed and tested
+
+---
+
 **Remember**: This information persists across sessions. Always refer to these files when starting a new session!

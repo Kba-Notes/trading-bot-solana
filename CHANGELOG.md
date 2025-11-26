@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.3] - 2025-11-26
+
+### Added
+- **💰 Manual Sell Command via Telegram** - New `/sell <TOKEN>` command for on-demand position selling
+  - **Usage**: `/sell JUP`, `/sell WIF`, `/sell PENG`, `/sell BONK`
+  - **Pre-Sell Confirmation**: Shows entry price, current price, and estimated P&L
+  - **Execution Feedback**: "Manual Sell Initiated" message while processing
+  - **Full Reliability**: Uses same `executeSellOrder()` with all retry logic and Helius fallback
+  - **Automatic Notification**: Standard sell notification sent with actual P&L
+  - **Error Handling**: Clear failure messages if sell doesn't succeed
+  - **Updated `/help`**: Command now included in help menu
+  - **Implementation**: [src/notifier/commandHandler.ts:190-254](src/notifier/commandHandler.ts#L190-L254)
+
+### Fixed
+- **🔔 Missing Notifications After Successful Swaps** - Critical bug when balance check fails post-swap
+  - **Problem Identified**: When swap succeeds but post-swap USDC balance check fails (429 rate limit):
+    - Exception thrown before sending Telegram notification
+    - Position removed but user never notified
+    - No P&L logged
+    - Example: PENG manual sell at 17:48:41 succeeded but user got no notification
+  - **Root Cause**: Balance check after successful swap threw 429 error, bypassing notification logic
+  - **Solution**: Wrapped balance check in try-catch with fallback to estimated P&L
+    - If balance check succeeds → Use actual USDC received (accurate P&L)
+    - If balance check fails → Use estimated P&L based on current price
+    - **Always send notification** regardless of balance check outcome
+    - Position still removed (swap already succeeded)
+  - **Implementation**:
+    - Main RPC path: [src/order_executor/trader.ts:414-433](src/order_executor/trader.ts#L414-L433)
+    - Helius fallback path: [src/order_executor/trader.ts:498-517](src/order_executor/trader.ts#L498-L517)
+  - **User Impact**: Will always receive sell notification even during RPC issues
+
+- **🔄 Balance Check Retry Logic** - Added retry mechanism to `getTokenBalance()` function
+  - **Problem Identified**: Function had no error handling, threw on first 429 error
+    - `getParsedTokenAccountsByOwner()` RPC call vulnerable to rate limits
+    - No retry logic or backoff delays
+    - Caused cascading failures in sell operations
+  - **Solution**: Added 4-attempt retry with exponential backoff
+    - **Rate limit errors (429)**: 2s → 4s → 8s delays (aggressive backoff)
+    - **Other errors**: 1s → 2s → 3s delays (standard backoff)
+    - Clear logging showing attempt numbers and delays
+    - Only throws after all 4 attempts exhausted
+  - **Implementation**: [src/order_executor/trader.ts:332-362](src/order_executor/trader.ts#L332-L362)
+  - **Expected Impact**:
+    - Significantly reduced balance check failures
+    - Better handling of temporary RPC congestion
+    - More reliable P&L calculation
+    - Fewer fallbacks to estimated P&L
+
 ## [2.12.2] - 2025-11-26
 
 ### Fixed
