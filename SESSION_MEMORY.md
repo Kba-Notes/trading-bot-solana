@@ -1256,38 +1256,107 @@ git status --ignored | grep .env  # Verify .env ignored
    - **Documentation Updated**:
      - CHANGELOG.md: v2.11.3 entry with problem examples and solution
      - SESSION_MEMORY.md: This chronological entry
-   - **Status**: ✅ Ready for deployment - actual P&L calculation active
+   - **Status**: ✅ Deployed - actual P&L calculation active
 
-### 📊 Current Strategy Configuration (v2.11.3)
+43. **Complete Strategy Overhaul** (Commit: TBD - Nov 23, 2025) - **v2.12.0**
+   - **MAJOR CHANGE**: Decoupled momentum from MH, added token-level momentum filter, fixed trailing stop
+   - **User Feedback**: "we need to revise the strategy as I'm currently losing money since the beginning of the bot. the momentum has revealed as something very useful, but doing it now as part of the calculation of the MH every 5 minutes I think is causing the losses"
+   - **Problem Analysis**:
+     - Momentum-adjusted MH created unstable signals (changed rapidly every 5 min)
+     - Dynamic trailing stop based on unstable MH = inconsistent risk management
+     - False entries when MH momentum spiked temporarily
+     - Premature exits when MH momentum dropped
+     - No way to distinguish genuinely hot tokens from market-wide momentum
+     - 5-min Golden Cross caught too much noise, leading to whipsaw trades
+   - **Root Cause**: Mixing market-level momentum with token-level signals
+     - Market momentum should filter overall market health (bull/bear)
+     - Token momentum should identify hot individual tokens
+     - Combining them created confusion and false signals
+   - **Solution**: Separate concerns - stable market filter + hot token detector + predictable exits
 
-**Entry Conditions (Enhanced)**:
-- **Momentum-Adjusted Market Health Index > 0** (v2.10.0: Raw MH + momentum × 2.0)
-  - Base: BTC/ETH/SOL weighted SMA(20) on 5-minute timeframe (v2.10.1: aligned with bot's 5-min cycle)
-  - **Momentum: Average rate of change over last 2 periods (10 minutes)** ✅ **v2.11.0: OPTIMIZED**
-    - Changed from 3 periods (15 min) based on 60-trade analysis
-    - 2-cycle provides +400% net P&L improvement and +15.6% win rate boost
-  - Prevents buying into declining markets (death spiral detection)
-  - Enables buying during recoveries (positive momentum from negative MH)
-  - Both raw and adjusted MH shown in logs and Telegram for transparency
-- Golden Cross: SMA(12) > SMA(26) on **1-minute candles** (12/26 min lookback) ✅ **PRIMARY SIGNAL**
-  - v2.10.2: Ultra-fast entry timing for volatile meme coins
-- ~~RSI(14) > 50~~ **OPTIONAL** (disabled by default for meme coins, calculated on 1-min candles)
-- **Filter**: SMA slope > 0.1% (trend strength)
-- **Filter**: Volatility < 5% (market stability)
+   **New Entry Logic (v2.12.0):**
+   1. **Raw MH > 0.1** (NO momentum adjustment)
+      - Pure BTC/ETH/SOL health indicator
+      - Stable bull market filter
+      - No rapid changes from momentum spikes
+   2. **Token 3-period momentum > 1%** (calculated on 1-minute candles)
+      - Detects genuinely hot tokens
+      - Formula: `((price[now] - price[3-min-ago]) / price[3-min-ago]) * 100`
+      - Momentum calculated per-token, not market-wide
+      - Finds tokens heating up faster than market average
+   3. **Golden Cross** (SMA12 > SMA26)
+      - Confirms uptrend started
+      - Same as before
 
-**Exit Conditions (Optimized for 1-Minute Monitoring + Dynamic Trailing)**:
-- ~~Take Profit~~ **REMOVED** (unreachable with immediate trailing activation)
-- Stop Loss: **-1%** (backup protection, rarely hit due to trailing)
-- **Dynamic Trailing Stop**: Activates **immediately on position entry**, percentage adapts to **momentum-adjusted** market health
-  - **Adjusted MH < 0**: 0% trailing (immediate sell in bearish markets or negative momentum)
-  - **Adjusted MH 0-0.3**: 0.5% trailing (very tight protection in weak bullish)
-  - **Adjusted MH 0.3-0.6**: 1.0% trailing (tight protection in moderate bullish)
-  - **Adjusted MH 0.6-0.9**: 2.25% trailing (moderate room in strong bullish)
-  - **Adjusted MH ≥ 0.9**: 3.5% trailing (maximum room in very strong bullish)
-  - **v2.10.0**: Uses momentum-adjusted MH (negative momentum tightens stops, positive widens)
-  - **v2.9.2 FIX**: Activates on entry, not when price goes positive (ensures 0% trailing works)
+   **All three conditions must be true for entry** (stricter filtering)
+
+   **New Exit Logic (v2.12.0):**
+   - **Stop Loss**: -1% from entry (unchanged)
+   - **Trailing Stop**: Fixed 2.5% (NO LONGER dynamic based on MH)
+   - **No Take Profit**: Let trailing stop manage all exits
+
+   **Why This Works Better:**
+   - ✅ Stable MH: Raw value = reliable bull/bear indicator
+   - ✅ Hot token detection: 1-min momentum finds genuine heat
+   - ✅ Momentum where it matters: Per-token (not market-wide)
+   - ✅ Predictable exits: Fixed 2.5% = consistent risk management
+   - ✅ Less whipsaw: Higher MH threshold (0.1 vs 0) = fewer false signals
+   - ✅ Clearer logic: Separate filters = easier to understand and debug
+   - ✅ Fewer trades: Stricter entry (3 conditions) = higher quality signals
+
+   **Implementation Details:**
+   - Line 407-409: Removed `getAdjustedMarketHealth()` call, use raw MH directly
+   - Line 293: Changed MH threshold from `<= 0` to `< 0.1`
+   - Lines 314-326: Added token momentum calculation using 1-min candles
+   - Lines 329-333: Added momentum > 1% entry filter (skip if momentum too low)
+   - Lines 226-227: Changed trailing stop to fixed 0.025 (2.5%)
+   - Lines 41-42: Updated `getDynamicTrailingStop()` to return fixed value
+   - Updated logging: Show token momentum, fixed trailing %, raw MH only
+
+   **Expected Impact:**
+   - Fewer signals (stricter filters)
+   - Higher quality entries (stable MH + hot tokens + golden cross)
+   - Consistent exits (fixed 2.5% trailing)
+   - Better risk/reward (less whipsaw from false signals)
+   - Improved profitability (trade quality over quantity)
+
+   **Files Modified**:
+     - `src/bot.ts` lines 293, 314-333: Entry logic with token momentum
+     - `src/bot.ts` lines 226-227, 41-42: Fixed trailing stop
+     - `src/bot.ts` lines 407-413: Raw MH usage (no adjustment)
+     - `src/bot.ts` lines 421, 438: Updated references to raw MH
+   - **Documentation Updated**:
+     - CHANGELOG.md: v2.12.0 entry with complete strategy explanation
+     - SESSION_MEMORY.md: This chronological entry
+   - **Status**: ✅ Ready for deployment - new strategy active
+
+### 📊 Current Strategy Configuration (v2.12.0)
+
+**Entry Conditions (v2.12.0 - COMPLETELY REVISED)**:
+1. **Raw Market Health > 0.1** (NO momentum adjustment)
+   - Pure BTC/ETH/SOL weighted SMA(20) on 5-minute candles
+   - Stable bull market filter (no rapid momentum changes)
+   - More strict threshold: 0.1 vs previous 0 (fewer false signals)
+
+2. **Token 3-Period Momentum > 1%** (calculated on 1-minute candles)
+   - Formula: `((price[now] - price[3-min-ago]) / price[3-min-ago]) * 100`
+   - Detects genuinely hot tokens (not market-wide momentum)
+   - Per-token heat detection (momentum where it matters)
+
+3. **Golden Cross**: SMA(12) > SMA(26) on 5-minute candles
+   - Confirms uptrend started
+   - Same as previous versions
+
+**ALL THREE CONDITIONS must be true for entry** (stricter filtering = fewer but better signals)
+
+**Exit Conditions (v2.12.0 - FIXED TRAILING STOP)**:
+- **Stop Loss**: -1% from entry (backup protection)
+- **Fixed Trailing Stop**: 2.5% (NO LONGER dynamic based on MH)
+  - Consistent, predictable risk management
+  - Activates immediately on position entry
   - Updates highestPrice every minute for accurate peak capture
-  - Tighter thresholds (v2.9.1) lock in gains faster while still giving room for strong moves
+  - No complexity from MH adjustments
+- **No Take Profit**: Let trailing stop manage all exits
 
 **Monitoring Frequency (OPTIMIZED)**:
 - Main analysis cycle: **Every 15 minutes** (changed from 1 hour) - 96 checks/day

@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2025-11-23
+
+### Changed
+- **🎯 Complete Strategy Overhaul** - Decoupled momentum from MH, added token-level momentum filter, fixed trailing stop
+  - **User Feedback**: "we need to revise the strategy as I'm currently losing money since the beginning of the bot"
+  - **Problem Identified**: Momentum in MH calculation creating false signals and unstable exits
+    - MH momentum changed rapidly every 5 minutes, causing premature entries/exits
+    - Dynamic trailing stop based on unstable MH led to inconsistent risk management
+    - Golden Cross on 5-min candles caught too much noise
+    - No filter for genuinely hot tokens vs temporary spikes
+  - **Solution**: Separate concerns - stable market filter + hot token detector + predictable exits
+
+  **Entry Logic (v2.12.0):**
+  - **Raw MH > 0.1** (no momentum adjustment) - Stable bull market filter
+  - **Token 3-period momentum > 1%** (calculated on 1-minute candles) - Hot token detector
+  - **Golden Cross** (SMA12 > SMA26) - Trend confirmation
+  - All three conditions must be true for entry
+
+  **Exit Logic (v2.12.0):**
+  - **Stop Loss**: -1% from entry (unchanged)
+  - **Trailing Stop**: Fixed 2.5% (no longer dynamic based on MH)
+  - **No Take Profit**: Let trailing stop manage all exits
+
+  **Why This Works Better:**
+  - ✅ **Stable MH**: Raw MH without momentum = reliable bull/bear market filter
+  - ✅ **Hot Token Detection**: 3-period momentum on 1-min candles finds genuinely heating tokens
+  - ✅ **Momentum Where It Matters**: Token-level momentum (not market-level) identifies opportunities
+  - ✅ **Predictable Exits**: Fixed 2.5% trailing = consistent risk management
+  - ✅ **Less Whipsaw**: Higher MH threshold (0.1 vs 0) + momentum filter = fewer false signals
+  - ✅ **Clearer Logic**: Separate filters for market health and token momentum = easier to debug
+
+  **Technical Changes:**
+  - Removed momentum adjustment from MH calculation in [src/bot.ts:407-409](src/bot.ts#L407-L409)
+  - Changed MH threshold from `<= 0` to `< 0.1` in [src/bot.ts:293](src/bot.ts#L293)
+  - Added token momentum calculation using 1-min candles in [src/bot.ts:314-326](src/bot.ts#L314-L326)
+  - Added momentum > 1% entry filter in [src/bot.ts:329-333](src/bot.ts#L329-L333)
+  - Changed trailing stop to fixed 2.5% in [src/bot.ts:226-227](src/bot.ts#L226-L227)
+  - Updated `getDynamicTrailingStop()` to return fixed 0.025 in [src/bot.ts:41-42](src/bot.ts#L41-L42)
+  - Updated logging to show token momentum and fixed trailing percentage
+
+  **Expected Impact:**
+  - Fewer but higher quality signals (stronger filters)
+  - More stable entries (raw MH + hot token detection)
+  - Consistent exits (fixed trailing stop)
+  - Better risk management (predictable 2.5% trail)
+  - Improved profitability (less whipsaw, better entries)
+
 ## [2.11.3] - 2025-11-23
 
 ### Fixed

@@ -35,16 +35,11 @@ const strategy = new GoldenCrossStrategy({
 });
 
 /**
- * Calculate dynamic trailing stop percentage based on market health
- * Higher market health = wider trailing stop (allow more room for volatility)
- * Lower market health = tighter trailing stop (protect capital)
+ * Get fixed trailing stop percentage (v2.12.0: removed dynamic MH-based logic)
+ * Fixed at 2.5% for consistent, predictable exits
  */
 export function getDynamicTrailingStop(marketHealth: number): number {
-    if (marketHealth < 0) return 0.00;         // 0% - Immediate sell in bearish markets
-    else if (marketHealth < 0.3) return 0.005; // 0.5% - Weak bullish, very tight trailing
-    else if (marketHealth < 0.6) return 0.01;  // 1.0% - Moderate bullish, tight trailing
-    else if (marketHealth < 0.9) return 0.0225;// 2.25% - Strong bullish, moderate room
-    else return 0.035;                         // 3.5% - Very strong bullish, maximum room
+    return 0.025; // Fixed 2.5% trailing stop (no longer dynamic)
 }
 
 /**
@@ -227,8 +222,8 @@ async function checkOpenPositions() {
                 await savePositions(getOpenPositions());
             }
 
-            // Dynamic trailing stop based on market health (replaces fixed 1%)
-            const trailingStopPercent = getDynamicTrailingStop(latestMarketHealth);
+            // Fixed 2.5% trailing stop (v2.12.0: no longer dynamic based on MH)
+            const trailingStopPercent = 0.025; // Fixed 2.5%
             const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
 
             // Calculate potential P&L if trailing stop is hit
@@ -236,8 +231,8 @@ async function checkOpenPositions() {
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const pnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-            // Log trailing stop status with dynamic percentage, potential P&L, and highest price
-            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)} (${(trailingStopPercent * 100).toFixed(1)}% trail @ MH=${latestMarketHealth.toFixed(2)}), Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
+            // Log trailing stop status with fixed percentage, potential P&L, and highest price
+            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)} (${(trailingStopPercent * 100).toFixed(1)}% fixed trail), Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
 
             // Show distance to move trailing up (how much price needs to rise to beat current high)
             const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
@@ -289,8 +284,9 @@ async function findNewOpportunities(marketHealthIndex: number) {
     const openPositions = getOpenPositions();
     logger.info('Searching for new buy opportunities...');
 
-    if (marketHealthIndex <= 0) {
-        logger.info('Negative market filter. Buying disabled for this cycle.');
+    // v2.12.0: Changed from <= 0 to < 0.1 (more strict raw MH filter)
+    if (marketHealthIndex < 0.1) {
+        logger.info(`Market Health ${marketHealthIndex.toFixed(2)} < 0.1 threshold. Buying disabled for this cycle.`);
         return 0; // Return buy signals count
     }
 
@@ -305,6 +301,28 @@ async function findNewOpportunities(marketHealthIndex: number) {
         const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
         if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
             logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
+            await sleep(API_DELAYS.RATE_LIMIT);
+            continue;
+        }
+
+        // v2.12.0: Calculate token-level momentum using 1-minute candles
+        const oneMinCandles = await getJupiterHistoricalData(asset.geckoPool, '1m', 5); // Get 5 candles for 3-period momentum
+        let tokenMomentum = 0;
+        if (oneMinCandles.length >= 4) {
+            // Calculate 3-period momentum: (current - 3 periods ago) / 3 periods ago * 100
+            const currentPrice = oneMinCandles[oneMinCandles.length - 1];
+            const priceThreePeriodsAgo = oneMinCandles[oneMinCandles.length - 4];
+            tokenMomentum = ((currentPrice - priceThreePeriodsAgo) / priceThreePeriodsAgo) * 100;
+            logger.info(`[Token Momentum]: ${asset.name} = ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}% (3-period on 1-min candles)`);
+        } else {
+            logger.warn(`Insufficient 1-min candles for ${asset.name} momentum calculation, skipping...`);
+            await sleep(API_DELAYS.RATE_LIMIT);
+            continue;
+        }
+
+        // v2.12.0: Require token momentum > 1% for entry
+        if (tokenMomentum <= 1.0) {
+            logger.info(`[Entry Filter]: ${asset.name} momentum ${tokenMomentum.toFixed(2)}% ≤ 1.0% threshold - HOLD`);
             await sleep(API_DELAYS.RATE_LIMIT);
             continue;
         }
@@ -404,13 +422,13 @@ async function main() {
                     mhHistory.shift(); // Remove oldest
                 }
 
-                // Calculate momentum-adjusted Market Health
-                const adjustedMarketHealth = getAdjustedMarketHealth(rawMarketHealth);
-                latestMarketHealth = adjustedMarketHealth; // Store adjusted MH for dynamic trailing stops
+                // Use RAW Market Health (v2.12.0: removed momentum adjustment)
+                // Momentum now calculated per-token for entry signals only
+                latestMarketHealth = rawMarketHealth; // Store raw MH for filtering
 
                 await checkOpenPositions();
 
-                const buySignals = await findNewOpportunities(adjustedMarketHealth);
+                const buySignals = await findNewOpportunities(rawMarketHealth);
 
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
@@ -418,8 +436,8 @@ async function main() {
                 // Send analysis summary after each cycle (with log file)
                 const openPositions = getOpenPositions();
                 await sendAnalysisSummary({
-                    marketHealth: adjustedMarketHealth,
-                    rawMarketHealth: rawMarketHealth, // Show both raw and adjusted
+                    marketHealth: rawMarketHealth,
+                    rawMarketHealth: rawMarketHealth,
                     assetsAnalyzed: assetsToTrade.length,
                     buySignals,
                     openPositions: openPositions.length,
@@ -435,7 +453,7 @@ async function main() {
                         `❤️ **Heartbeat**\n` +
                         `Bot is still active.\n` +
                         `Open positions: ${openPositions.length}\n` +
-                        `Market Index: \`${adjustedMarketHealth.toFixed(2)}\`\n` +
+                        `Market Index: \`${rawMarketHealth.toFixed(2)}\`\n` +
                         `Uptime: ${metrics.uptime}\n` +
                         `API Success Rate: ${metrics.apiCalls.successRate}`
                     );

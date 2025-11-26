@@ -209,9 +209,20 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.11.3
+**Current Version:** 2.12.0
 
-### Latest Updates (v2.11.3 - Nov 23, 2025)
+### Latest Updates (v2.12.0 - Nov 23, 2025)
+- **🎯 Complete Strategy Overhaul** - Decoupled momentum from MH, added token-level momentum, fixed trailing stop
+  - **Problem**: Momentum in MH calculation creating false signals, causing losses
+  - **Solution**: Separate market health filter from token momentum detection
+  - **New Entry**: Raw MH > 0.1 + Token 3-period momentum > 1% + Golden Cross
+  - **New Exit**: Fixed 2.5% trailing stop (no longer dynamic)
+  - **Result**: Fewer but higher quality signals, consistent exits, better profitability
+  - Stricter filtering reduces whipsaw trades
+  - Predictable risk management with fixed trailing stop
+  - Token momentum finds genuinely hot tokens (not market-wide spikes)
+
+### Previous Updates (v2.11.3)
 - **💰 Accurate P&L Calculation** - P&L now matches Phantom wallet and Solscan exactly
   - Fixed discrepancy between bot's reported P&L and actual USDC received
   - Previous calculation was theoretical (price difference only), ignored fees and slippage
