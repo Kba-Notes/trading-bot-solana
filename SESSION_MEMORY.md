@@ -1485,4 +1485,92 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ---
 
+## Entry 46: v2.12.2 - Switched to Jupiter Real-Time Prices for Momentum (Nov 26, 2025)
+
+**Context**: User identified that GeckoTerminal 1-minute candles were stale/cached, showing identical values for 3+ consecutive minutes.
+
+**User Feedback**: *"check the way the token momentum is calculated every minute, as the values are the same... as if it is not taking the last 3 1-minute candles, but some fixed 3-minute candles unchanged from minute to minute"*
+
+**Problem**:
+  - v2.12.1 used GeckoTerminal 1-minute candles for token momentum
+  - User showed WIF had identical 4 candle values at 17:17, 17:18, AND 17:19
+  - Values: $0.35433498 → $0.35256673 → $0.35248344 → $0.35250019 (all three minutes)
+  - GeckoTerminal appears to cache 1-minute candles for 3+ minutes
+  - Defeated purpose of 1-minute checking (stale data = no real-time detection)
+
+**Root Cause**:
+  - GeckoTerminal `/ohlcv/minute` endpoint returns cached data
+  - 1-minute candles don't update every minute (lag/caching on their side)
+  - Using GeckoTerminal for real-time momentum = fundamentally flawed
+
+**User's Solution Choice**:
+  - Presented 2 options:
+    1. Switch to Jupiter real-time prices (true real-time, no caching)
+    2. Increase momentum period to 5 minutes (work around cache issue)
+  - User chose: *"yes do number 1"*
+  - Also specified new momentum formula: *"calculate the momentum % by averaging the variation from one period to the next, and not by comparing only current (T) and T-3"*
+
+**Implementation Details**:
+
+1. **Switched from GeckoTerminal candles to Jupiter real-time prices**:
+   - Added price history storage: `Map<string, PriceSnapshot[]>` (lines 30-36)
+   - Each token stores last 3 prices with timestamps
+   - Prices fetched from Jupiter every minute (truly real-time)
+
+2. **New momentum calculation formula** (user specification):
+   - Fetch 3 prices: T-2 (2 periods ago), T-1 (1 period ago), T (current)
+   - Calculate variation 1: `((T-1 - T-2) / T-2) * 100`
+   - Calculate variation 2: `((T - T-1) / T-1) * 100`
+   - Momentum = average of the two variations: `(var1 + var2) / 2`
+   - More accurate than single T-to-T-3 comparison
+   - Captures consecutive momentum shifts
+
+3. **Rewritten `checkTokenMomentumForBuy()` function** (lines 292-405):
+   - Get current Jupiter price (real-time)
+   - Store in price history for this asset
+   - Keep only last 3 prices (FIFO queue)
+   - Wait until 3 prices collected before calculating momentum
+   - Calculate averaged momentum using consecutive variations
+   - Log detailed breakdown: prices, variations, averaged momentum
+   - Check if momentum > 1% before proceeding to Golden Cross
+
+4. **Enhanced logging** (lines 347-362):
+   ```
+   [1-Min Check] Starting token momentum scan (MH=0.46%)...
+     JUP: Momentum +0.43%
+       └─ Prices: T-2=$0.25125322 → T-1=$0.25334234 → T=$0.25339941
+       └─ Var1: +0.83%, Var2: +0.02%, Avg: +0.43%
+   ```
+   - Shows all 3 prices with clear progression
+   - Shows both variations and their average
+   - Clear visibility into momentum calculation
+
+**Benefits**:
+  - ✅ **True real-time data**: Jupiter prices update every minute (no caching)
+  - ✅ **Accurate momentum**: Captures actual price movements minute-by-minute
+  - ✅ **Better formula**: Averaged consecutive variations more accurate than single comparison
+  - ✅ **Transparent logging**: Can see exact price progression and calculations
+  - ✅ **No more stale data**: Solves fundamental GeckoTerminal caching issue
+  - ✅ **Reliable detection**: Catches pumps as they happen (not 3+ minutes later)
+
+**Expected Impact**:
+  - More accurate momentum detection
+  - Faster entry during genuine pumps
+  - No false signals from stale data
+  - Better profitability from improved timing
+
+**Files Modified**:
+  - `src/bot.ts` lines 30-36: Added price history storage
+  - `src/bot.ts` lines 292-405: Complete rewrite of `checkTokenMomentumForBuy()` with Jupiter prices
+  - `src/bot.ts` lines 347-362: Enhanced logging with price breakdown
+
+**Verification**:
+  - User confirmed prices now update every minute
+  - Example from logs: WIF prices changed from $0.37051032 → $0.37179732 → $0.37306555 across 3 consecutive minutes
+  - Momentum calculations showing real variation (not identical values)
+
+**Status**: ✅ Complete - Jupiter real-time prices active
+
+---
+
 **Remember**: This information persists across sessions. Always refer to these files when starting a new session!

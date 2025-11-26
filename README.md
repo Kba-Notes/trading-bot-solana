@@ -209,9 +209,21 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.12.1
+**Current Version:** 2.12.2
 
-### Latest Updates (v2.12.1 - Nov 26, 2025)
+### Latest Updates (v2.12.2 - Nov 26, 2025)
+- **🎯 Switched to Jupiter Real-Time Prices for Momentum** - Fixed stale GeckoTerminal data issue
+  - **Problem**: GeckoTerminal 1-min candles were cached, showing identical values for 3+ minutes
+  - **Solution**: Switched to Jupiter real-time prices for momentum calculation
+  - **New Formula**: Averaged consecutive variations instead of single T-to-T-3 comparison
+    - Var1 = (T-1 - T-2) / T-2, Var2 = (T - T-1) / T-1
+    - Momentum = (Var1 + Var2) / 2
+  - **Result**: True real-time momentum detection every minute
+  - Accurate price movements captured as they happen
+  - No more false signals from stale data
+  - Better entry timing during genuine pumps
+
+### Previous Updates (v2.12.1 - Nov 26, 2025)
 - **⚡ 1-Minute Token Momentum Checking** - Fixed timing inconsistency for faster entry
   - **Problem**: Using 1-min candles but checking every 5 mins missed fast pumps
   - **Solution**: Check token momentum every 1 minute when MH > 0.1

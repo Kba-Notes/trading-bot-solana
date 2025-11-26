@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.2] - 2025-11-26
+
+### Fixed
+- **🔄 Real-Time Jupiter Prices with Averaged Momentum** - Fixed stale GeckoTerminal data issue
+  - **Problem Identified**: GeckoTerminal 1-minute candles were cached/stale
+    - Same candle data returned for 3+ consecutive minutes
+    - Momentum values weren't changing minute-to-minute
+    - Defeated the purpose of 1-minute checking implemented in v2.12.1
+    - Example: WIF showed identical 4 candles at 17:17, 17:18, and 17:19
+  - **Solution**: Switch to Jupiter real-time prices with improved momentum calculation
+    - Fetch live Jupiter price every minute (no caching)
+    - Store last 3 prices in memory per token
+    - Calculate momentum using averaged consecutive variations
+
+  **New Momentum Formula (v2.12.2):**
+  - Fetch: T (current), T-1 (1 min ago), T-2 (2 min ago)
+  - Variation 1: (T-1 - T-2) / T-2 × 100
+  - Variation 2: (T - T-1) / T-1 × 100
+  - **Momentum = (Variation 1 + Variation 2) / 2**
+
+  **Why This Works Better:**
+  - ✅ **Real-Time Data**: Jupiter prices update every minute (no cache)
+  - ✅ **More Accurate**: Averaged variations smooth out single-period spikes
+  - ✅ **Better Detection**: Captures acceleration/deceleration patterns
+  - ✅ **Transparent Logging**: Shows T-2 → T-1 → T with both variations
+
+  **Technical Changes:**
+  - Added `priceHistory` Map to store last 3 prices per token in [src/bot.ts:36](src/bot.ts#L36)
+  - Rewrote `checkTokenMomentumForBuy()` to use real-time Jupiter prices in [src/bot.ts:292-405](src/bot.ts#L292-L405)
+  - Removed GeckoTerminal 1-minute candle fetching (replaced with Jupiter real-time)
+  - Enhanced logging to show price progression and variation calculations
+
+  **Example Output:**
+  ```
+  JUP: Momentum +0.43%
+  └─ Prices: T-2=$0.25125322 → T-1=$0.25334234 → T=$0.25339941
+  └─ Var1: +0.83%, Var2: +0.02%, Avg: +0.43%
+  ```
+
+  **Expected Impact:**
+  - Accurate momentum detection every minute
+  - No more stale/cached candle data
+  - Better identification of genuine momentum vs noise
+  - More reliable entry signals
+
 ## [2.12.1] - 2025-11-26
 
 ### Changed

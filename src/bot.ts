@@ -27,6 +27,14 @@ const MH_HISTORY_SIZE = 2; // Track last 2 periods (10 minutes) - optimal from 6
 const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impact from backtesting)
 const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
 
+// v2.12.2: Real-time price history for momentum calculation (Jupiter live prices)
+// Store last 3 prices per token for accurate momentum tracking
+interface PriceSnapshot {
+    price: number;
+    timestamp: Date;
+}
+const priceHistory: Map<string, PriceSnapshot[]> = new Map();
+
 const strategy = new GoldenCrossStrategy({
     shortSMAPeriod: strategyConfig.shortSMAPeriod,
     longSMAPeriod: strategyConfig.longSMAPeriod,
@@ -278,14 +286,17 @@ async function checkOpenPositions() {
 }
 
 /**
- * v2.12.1: Check token momentum every 1 minute when MH > 0.1
- * Catches fast-moving tokens by checking 1-min candles at 1-min intervals
+ * v2.12.2: Check token momentum every 1 minute using Jupiter real-time prices
+ * Uses averaged consecutive variations for more accurate momentum detection
  */
 async function checkTokenMomentumForBuy(): Promise<number> {
     // Check if market is bullish (cached MH value from 5-min cycle)
     if (latestMarketHealth < 0.1) {
+        logger.info(`[1-Min Check] Skipped - MH ${latestMarketHealth.toFixed(2)}% < 0.1 (market bearish)`);
         return 0; // No checks when market is bearish
     }
+
+    logger.info(`[1-Min Check] Starting token momentum scan (MH=${latestMarketHealth.toFixed(2)}%)...`);
 
     const openPositions = getOpenPositions();
     let buySignals = 0;
@@ -293,35 +304,74 @@ async function checkTokenMomentumForBuy(): Promise<number> {
     for (const asset of assetsToTrade) {
         // Skip if position already exists
         if (openPositions.some(p => p.asset === asset.mint)) {
+            logger.info(`  ${asset.name}: Position exists, skipping`);
             continue;
         }
 
         try {
-            // Fetch 1-minute candles for momentum calculation
-            const oneMinCandles = await getJupiterHistoricalData(asset.geckoPool, '1m', 5);
-            if (oneMinCandles.length < 4) {
+            // Fetch current Jupiter price (real-time)
+            const currentPrice = await getCurrentPrice(asset.mint);
+            if (!currentPrice) {
+                logger.warn(`  ${asset.name}: Could not get current price`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // Calculate 3-period momentum on 1-min candles
-            const currentPrice = oneMinCandles[oneMinCandles.length - 1];
-            const priceThreePeriodsAgo = oneMinCandles[oneMinCandles.length - 4];
-            const tokenMomentum = ((currentPrice - priceThreePeriodsAgo) / priceThreePeriodsAgo) * 100;
+            // Get or initialize price history for this asset
+            if (!priceHistory.has(asset.mint)) {
+                priceHistory.set(asset.mint, []);
+            }
+            const history = priceHistory.get(asset.mint)!;
+
+            // Add current price to history
+            history.push({ price: currentPrice, timestamp: new Date() });
+
+            // Keep only last 3 prices
+            if (history.length > 3) {
+                history.shift();
+            }
+
+            // Need at least 3 prices to calculate momentum
+            if (history.length < 3) {
+                logger.info(`  ${asset.name}: Building price history (${history.length}/3 prices)`);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+
+            // Calculate momentum using averaged consecutive variations
+            // T-2, T-1, T (current)
+            const priceT2 = history[0].price;  // 2 periods ago
+            const priceT1 = history[1].price;  // 1 period ago
+            const priceT = history[2].price;   // Current
+
+            // Variation from T-2 to T-1
+            const variation1 = ((priceT1 - priceT2) / priceT2) * 100;
+
+            // Variation from T-1 to T
+            const variation2 = ((priceT - priceT1) / priceT1) * 100;
+
+            // Momentum = average of the two variations
+            const tokenMomentum = (variation1 + variation2) / 2;
+
+            // Log with detailed breakdown
+            logger.info(`  ${asset.name}: Momentum ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
+            logger.info(`    └─ Prices: T-2=$${priceT2.toFixed(8)} → T-1=$${priceT1.toFixed(8)} → T=$${priceT.toFixed(8)}`);
+            logger.info(`    └─ Var1: ${variation1 > 0 ? '+' : ''}${variation1.toFixed(2)}%, Var2: ${variation2 > 0 ? '+' : ''}${variation2.toFixed(2)}%, Avg: ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
 
             // Check momentum threshold
             if (tokenMomentum <= 1.0) {
+                logger.info(`    └─ Below 1% threshold - HOLD`);
                 await sleep(API_DELAYS.RATE_LIMIT);
-                continue; // Skip logging for tokens below threshold (reduce log spam)
+                continue;
             }
 
-            // Token has momentum > 1%, log and check Golden Cross
-            logger.info(`[1-Min Check] ${asset.name} momentum: ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}% - Checking Golden Cross...`);
+            // Token has momentum > 1%, check Golden Cross
+            logger.info(`    └─ Above 1% threshold - Checking Golden Cross...`);
 
             // Fetch 5-min historical data for Golden Cross check
             const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
             if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
-                logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
+                logger.warn(`    └─ Insufficient 5-min historical data for Golden Cross check`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
@@ -331,27 +381,26 @@ async function checkTokenMomentumForBuy(): Promise<number> {
 
             if (decision.action === 'BUY') {
                 buySignals++;
-                logger.info(`[BUY SIGNAL] ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, Momentum=${tokenMomentum.toFixed(2)}%, ${decision.reason}`);
+                logger.info(`    └─ ✅ GOLDEN CROSS CONFIRMED - ${decision.reason}`);
+                logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, Momentum=${tokenMomentum.toFixed(2)}%`);
 
-                const currentPrice = await getCurrentPrice(asset.mint);
-                if (currentPrice) {
-                    const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
-                    if (!buySuccess) {
-                        logger.error(`Failed to execute buy order for ${asset.name} after all retries.`);
-                    }
-                } else {
-                    logger.error(`Could not get price to execute buy for ${asset.name}`);
+                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
+                if (!buySuccess) {
+                    logger.error(`    └─ ❌ Failed to execute buy order after all retries`);
                 }
+            } else {
+                logger.info(`    └─ ❌ Golden Cross NOT confirmed - ${decision.reason} - HOLD`);
             }
 
             await sleep(API_DELAYS.RATE_LIMIT);
         } catch (error) {
-            logger.error(`Error checking ${asset.name} momentum:`, getErrorMessage(error));
+            logger.error(`  ${asset.name}: Error - ${getErrorMessage(error)}`);
             await sleep(API_DELAYS.RATE_LIMIT);
             continue;
         }
     }
 
+    logger.info(`[1-Min Check] Completed - Buy signals: ${buySignals}`);
     return buySignals;
 }
 
