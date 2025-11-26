@@ -1369,24 +1369,94 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ---
 
-### 📊 Current Strategy Configuration (v2.12.0)
+## Entry 45: v2.12.1 - 1-Minute Token Momentum Checking (Nov 26, 2025)
 
-**Entry Conditions (v2.12.0 - COMPLETELY REVISED)**:
+**Context**: User identified logical inconsistency in v2.12.0 - using 1-minute candles but only checking every 5 minutes.
+
+**User Feedback**: *"it does not make sense to use 1-minute candle and calculate it every 5 minutes. So if MH>0.1 for the next 5 minutes we need to calculate the momentum of each token without an open position and if the momentum is >1% then the buy order triggers."*
+
+**Problem**:
+  - v2.12.0 used 1-minute candles for token momentum
+  - But only checked every 5 minutes (in main analysis cycle)
+  - Could miss tokens that pump and dump within those 5 minutes
+  - Defeated the purpose of using granular 1-minute data
+  - Only caught momentum if it happened at exact 5-minute check time
+
+**Solution Implemented**:
+  - Separate concerns: MH calculated every 5 minutes, token momentum checked every 1 minute
+  - Created new `checkTokenMomentumForBuy()` function
+  - Modified `positionMonitoringLoop` to check token momentum every minute
+  - Only check tokens when MH > 0.1 (cached from 5-min cycle)
+  - Remove `findNewOpportunities` from 5-min cycle (now redundant)
+
+**Changes Made**:
+
+1. **New Function: `checkTokenMomentumForBuy()`** (src/bot.ts:284-355):
+   - Checks if MH > 0.1 (using cached value from 5-min cycle)
+   - If yes: Check all tokens without open positions
+   - For each token:
+     - Fetch 1-minute candles (5 candles)
+     - Calculate 3-period momentum
+     - If momentum > 1%: Check Golden Cross
+     - If Golden Cross: Execute BUY immediately
+   - Logs: `[1-Min Check] {asset} momentum: {%}` only when > 1%
+   - Returns buy signals count
+
+2. **Modified `positionMonitoringLoop()`** (src/bot.ts:441-461):
+   - Added call to `checkTokenMomentumForBuy()` every minute
+   - Now handles BOTH position monitoring AND token momentum checking
+   - Runs continuously every 1 minute
+
+3. **Simplified 5-Minute Main Cycle** (src/bot.ts:509-526):
+   - Removed `await checkOpenPositions()` (now in 1-min loop)
+   - Removed `const buySignals = await findNewOpportunities()` (replaced by 1-min loop)
+   - Only calculates and caches Market Health
+   - Logs: "Token momentum checking ACTIVE/PAUSED" based on MH
+   - Sends analysis summary with buySignals: 0 (signals come from 1-min loop)
+
+4. **Removed `findNewOpportunities()` Function**:
+   - No longer needed (replaced by `checkTokenMomentumForBuy`)
+   - Eliminated code duplication
+
+**Expected Benefits**:
+  - ✅ **Logical Consistency**: 1-min data checked at 1-min intervals
+  - ✅ **Faster Entry**: Detect pumps within 1 minute (not 5)
+  - ✅ **No Missed Opportunities**: Don't miss tokens between 5-min checks
+  - ✅ **Efficient API Usage**: MH cached for 5 mins (3 calls), tokens checked every min (4-16 calls depending on MH)
+  - ✅ **Smart Filtering**: Skip token checks when MH < 0.1
+
+**Files Modified**:
+  - `src/bot.ts` lines 284-355: New `checkTokenMomentumForBuy()` function
+  - `src/bot.ts` lines 441-461: Modified `positionMonitoringLoop()`
+  - `src/bot.ts` lines 509-526: Simplified 5-minute main cycle
+  - `src/bot.ts`: Removed `findNewOpportunities()` function (lines 283-357 in v2.12.0)
+
+**Status**: ✅ Ready for deployment - 1-minute momentum checking active
+
+---
+
+### 📊 Current Strategy Configuration (v2.12.1)
+
+**Entry Conditions (v2.12.1 - WITH 1-MINUTE MOMENTUM CHECKING)**:
 1. **Raw Market Health > 0.1** (NO momentum adjustment)
    - Pure BTC/ETH/SOL weighted SMA(20) on 5-minute candles
+   - Calculated and cached every 5 minutes
    - Stable bull market filter (no rapid momentum changes)
    - More strict threshold: 0.1 vs previous 0 (fewer false signals)
 
-2. **Token 3-Period Momentum > 1%** (calculated on 1-minute candles)
+2. **Token 3-Period Momentum > 1%** (calculated EVERY MINUTE on 1-minute candles)
    - Formula: `((price[now] - price[3-min-ago]) / price[3-min-ago]) * 100`
+   - **v2.12.1**: Checked every 1 minute when MH > 0.1 (not every 5 minutes)
    - Detects genuinely hot tokens (not market-wide momentum)
    - Per-token heat detection (momentum where it matters)
+   - Catches pumps within 1 minute (not 5)
 
 3. **Golden Cross**: SMA(12) > SMA(26) on 5-minute candles
    - Confirms uptrend started
-   - Same as previous versions
+   - Checked when token momentum > 1%
 
 **ALL THREE CONDITIONS must be true for entry** (stricter filtering = fewer but better signals)
+**v2.12.1 KEY CHANGE**: Token momentum checked every 1 minute for faster entry timing
 
 **Exit Conditions (v2.12.0 - FIXED TRAILING STOP)**:
 - **Stop Loss**: -1% from entry (backup protection)

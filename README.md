@@ -209,9 +209,21 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.12.0
+**Current Version:** 2.12.1
 
-### Latest Updates (v2.12.0 - Nov 23, 2025)
+### Latest Updates (v2.12.1 - Nov 26, 2025)
+- **⚡ 1-Minute Token Momentum Checking** - Fixed timing inconsistency for faster entry
+  - **Problem**: Using 1-min candles but checking every 5 mins missed fast pumps
+  - **Solution**: Check token momentum every 1 minute when MH > 0.1
+  - **New Timing**:
+    - Market Health calculated/cached every 5 minutes (slow-changing indicator)
+    - Token momentum checked every 1 minute (fast-changing, needs real-time detection)
+  - **Result**: Catch meme coin pumps within 1 minute instead of up to 5 minutes later
+  - Better entry timing during momentum spikes
+  - No missed opportunities between 5-minute checks
+  - Logical consistency: 1-min data checked at 1-min intervals
+
+### Previous Updates (v2.12.0 - Nov 23, 2025)
 - **🎯 Complete Strategy Overhaul** - Decoupled momentum from MH, added token-level momentum, fixed trailing stop
   - **Problem**: Momentum in MH calculation creating false signals, causing losses
   - **Solution**: Separate market health filter from token momentum detection

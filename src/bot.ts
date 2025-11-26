@@ -278,98 +278,103 @@ async function checkOpenPositions() {
 }
 
 /**
- * Searches for new buy opportunities in the asset list.
+ * v2.12.1: Check token momentum every 1 minute when MH > 0.1
+ * Catches fast-moving tokens by checking 1-min candles at 1-min intervals
  */
-async function findNewOpportunities(marketHealthIndex: number) {
-    const openPositions = getOpenPositions();
-    logger.info('Searching for new buy opportunities...');
-
-    // v2.12.0: Changed from <= 0 to < 0.1 (more strict raw MH filter)
-    if (marketHealthIndex < 0.1) {
-        logger.info(`Market Health ${marketHealthIndex.toFixed(2)} < 0.1 threshold. Buying disabled for this cycle.`);
-        return 0; // Return buy signals count
+async function checkTokenMomentumForBuy(): Promise<number> {
+    // Check if market is bullish (cached MH value from 5-min cycle)
+    if (latestMarketHealth < 0.1) {
+        return 0; // No checks when market is bearish
     }
 
+    const openPositions = getOpenPositions();
     let buySignals = 0;
 
     for (const asset of assetsToTrade) {
+        // Skip if position already exists
         if (openPositions.some(p => p.asset === asset.mint)) {
-            logger.info(`Position already exists for ${asset.name}, skipping...`);
             continue;
         }
 
-        const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
-        if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
-            logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
-            await sleep(API_DELAYS.RATE_LIMIT);
-            continue;
-        }
+        try {
+            // Fetch 1-minute candles for momentum calculation
+            const oneMinCandles = await getJupiterHistoricalData(asset.geckoPool, '1m', 5);
+            if (oneMinCandles.length < 4) {
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
 
-        // v2.12.0: Calculate token-level momentum using 1-minute candles
-        const oneMinCandles = await getJupiterHistoricalData(asset.geckoPool, '1m', 5); // Get 5 candles for 3-period momentum
-        let tokenMomentum = 0;
-        if (oneMinCandles.length >= 4) {
-            // Calculate 3-period momentum: (current - 3 periods ago) / 3 periods ago * 100
+            // Calculate 3-period momentum on 1-min candles
             const currentPrice = oneMinCandles[oneMinCandles.length - 1];
             const priceThreePeriodsAgo = oneMinCandles[oneMinCandles.length - 4];
-            tokenMomentum = ((currentPrice - priceThreePeriodsAgo) / priceThreePeriodsAgo) * 100;
-            logger.info(`[Token Momentum]: ${asset.name} = ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}% (3-period on 1-min candles)`);
-        } else {
-            logger.warn(`Insufficient 1-min candles for ${asset.name} momentum calculation, skipping...`);
-            await sleep(API_DELAYS.RATE_LIMIT);
-            continue;
-        }
+            const tokenMomentum = ((currentPrice - priceThreePeriodsAgo) / priceThreePeriodsAgo) * 100;
 
-        // v2.12.0: Require token momentum > 1% for entry
-        if (tokenMomentum <= 1.0) {
-            logger.info(`[Entry Filter]: ${asset.name} momentum ${tokenMomentum.toFixed(2)}% ≤ 1.0% threshold - HOLD`);
-            await sleep(API_DELAYS.RATE_LIMIT);
-            continue;
-        }
-
-        // Log asset name before analysis
-        logger.info(`[Asset Analysis]: ${asset.name}`);
-
-        const { decision, indicators } = runStrategy(asset.mint, historicalPrices, marketHealthIndex, strategyConfig.requireRsiConfirmation);
-
-        // Detailed logging
-        if (indicators) {
-            logger.info(`[Technical Data]: SMA12=${indicators.sma12.toFixed(8)} | SMA26=${indicators.sma26.toFixed(8)} | RSI14=${indicators.rsi14.toFixed(2)}`);
-            logger.info(`[Decision]: ${decision.action}. Reason: ${decision.reason}`);
-        }
-
-        if (decision.action === 'BUY') {
-            buySignals++;
-            const currentPrice = await getCurrentPrice(asset.mint);
-            if (currentPrice) {
-                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
-                if (!buySuccess) {
-                    logger.error(`Failed to execute buy order for ${asset.name} after all retries.`);
-                }
-            } else {
-                logger.error(`Could not get price to execute buy for ${asset.name}`);
+            // Check momentum threshold
+            if (tokenMomentum <= 1.0) {
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue; // Skip logging for tokens below threshold (reduce log spam)
             }
+
+            // Token has momentum > 1%, log and check Golden Cross
+            logger.info(`[1-Min Check] ${asset.name} momentum: ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}% - Checking Golden Cross...`);
+
+            // Fetch 5-min historical data for Golden Cross check
+            const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
+            if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
+                logger.warn(`Insufficient historical data for ${asset.name}, skipping...`);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+
+            // Run strategy to check Golden Cross
+            const { decision, indicators } = runStrategy(asset.mint, historicalPrices, latestMarketHealth, strategyConfig.requireRsiConfirmation);
+
+            if (decision.action === 'BUY') {
+                buySignals++;
+                logger.info(`[BUY SIGNAL] ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, Momentum=${tokenMomentum.toFixed(2)}%, ${decision.reason}`);
+
+                const currentPrice = await getCurrentPrice(asset.mint);
+                if (currentPrice) {
+                    const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
+                    if (!buySuccess) {
+                        logger.error(`Failed to execute buy order for ${asset.name} after all retries.`);
+                    }
+                } else {
+                    logger.error(`Could not get price to execute buy for ${asset.name}`);
+                }
+            }
+
+            await sleep(API_DELAYS.RATE_LIMIT);
+        } catch (error) {
+            logger.error(`Error checking ${asset.name} momentum:`, getErrorMessage(error));
+            await sleep(API_DELAYS.RATE_LIMIT);
+            continue;
         }
-        await sleep(API_DELAYS.RATE_LIMIT);
     }
 
     return buySignals;
 }
 
 /**
- * Lightweight position monitoring loop - runs every 1 minute
- * Only checks positions when they exist (no market analysis)
+ * v2.12.1: Combined 1-minute loop for positions and token momentum
+ * Checks positions AND token momentum every minute when MH > 0.1
  */
 async function positionMonitoringLoop() {
     while (true) {
         try {
+            // 1. Check existing positions for trailing stops
             const openPositions = getOpenPositions();
             if (openPositions.length > 0) {
                 logger.info(`[Position Monitor] Checking ${openPositions.length} open positions...`);
                 await checkOpenPositions();
             }
+
+            // 2. Check token momentum for new buy opportunities (when MH > 0.1)
+            // This runs every minute to catch fast-moving tokens using 1-min candles
+            await checkTokenMomentumForBuy();
+
         } catch (error) {
-            logger.error('[Position Monitor] Error checking positions:', getErrorMessage(error));
+            logger.error('[Position Monitor] Error in 1-minute loop:', getErrorMessage(error));
         }
 
         await sleep(POSITION_CHECK_INTERVAL);
@@ -422,16 +427,13 @@ async function main() {
                     mhHistory.shift(); // Remove oldest
                 }
 
-                // Use RAW Market Health (v2.12.0: removed momentum adjustment)
-                // Momentum now calculated per-token for entry signals only
-                latestMarketHealth = rawMarketHealth; // Store raw MH for filtering
-
-                await checkOpenPositions();
-
-                const buySignals = await findNewOpportunities(rawMarketHealth);
+                // v2.12.1: Store raw MH for 1-minute momentum checks
+                // Token momentum checking now runs every 1 minute (not every 5 minutes)
+                latestMarketHealth = rawMarketHealth;
 
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
+                logger.info(`Market Health: ${rawMarketHealth.toFixed(2)}% - ${rawMarketHealth >= 0.1 ? 'Token momentum checking ACTIVE (1-min intervals)' : 'Token checking PAUSED (bearish market)'}`);
 
                 // Send analysis summary after each cycle (with log file)
                 const openPositions = getOpenPositions();
@@ -439,7 +441,7 @@ async function main() {
                     marketHealth: rawMarketHealth,
                     rawMarketHealth: rawMarketHealth,
                     assetsAnalyzed: assetsToTrade.length,
-                    buySignals,
+                    buySignals: 0, // v2.12.1: Buy signals now come from 1-min loop, not 5-min cycle
                     openPositions: openPositions.length,
                     cycleNumber: executionCycleCounter
                 });

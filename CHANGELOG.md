@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.1] - 2025-11-26
+
+### Changed
+- **⚡ 1-Minute Token Momentum Checking** - Fixed logical inconsistency in v2.12.0 implementation
+  - **User Feedback**: "it does not make sense to use 1-minute candle and calculate it every 5 minutes"
+  - **Problem Identified**: Using 1-min candles but checking every 5 minutes missed fast-moving tokens
+    - Token could pump and dump within those 5 minutes between checks
+    - Defeated the purpose of using granular 1-minute data
+    - Only caught momentum if it happened at the exact 5-minute check time
+  - **Solution**: Check token momentum every 1 minute when MH > 0.1
+
+  **New Logic (v2.12.1):**
+  - **5-Minute Cycle**: Calculate and cache Market Health
+    - MH changes slowly (20-period SMA on 5-min candles)
+    - Checking every 5 minutes is sufficient
+  - **1-Minute Cycle**: Check token momentum when MH > 0.1
+    - For each token without a position:
+      - Fetch latest 1-minute candles
+      - Calculate 3-period momentum
+      - If momentum > 1% AND Golden Cross → BUY immediately
+    - Catches pumps within 1 minute (not 5 minutes later)
+
+  **Why This Works Better:**
+  - ✅ **Logical Consistency**: 1-min data checked at 1-min intervals
+  - ✅ **Faster Entry**: Detect and enter pumps within 1 minute
+  - ✅ **No Missed Opportunities**: Don't miss tokens that pump between 5-min checks
+  - ✅ **Efficient**: MH cached for 5 mins (only 3 API calls), tokens checked every min
+  - ✅ **Smart Filtering**: Only check tokens when MH > 0.1 (skip in bearish markets)
+
+  **Technical Changes:**
+  - Created `checkTokenMomentumForBuy()` function for 1-minute checks in [src/bot.ts:284-355](src/bot.ts#L284-L355)
+  - Modified `positionMonitoringLoop()` to call momentum checker every minute in [src/bot.ts:441-461](src/bot.ts#L441-L461)
+  - Simplified 5-minute cycle to only calculate MH in [src/bot.ts:509-526](src/bot.ts#L509-L526)
+  - Removed `findNewOpportunities()` function (replaced by 1-min momentum checker)
+  - Added status logging: "Token momentum checking ACTIVE/PAUSED" based on MH
+
+  **Expected Impact:**
+  - Catch meme coin pumps within 1 minute (vs up to 5 minutes delay)
+  - Better entry timing (enter during momentum spike, not after)
+  - Higher profit potential (earlier entries mean better prices)
+  - No change to exit strategy (still fixed 2.5% trailing stop)
+
 ## [2.12.0] - 2025-11-23
 
 ### Changed
