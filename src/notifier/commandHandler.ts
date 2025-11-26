@@ -3,7 +3,7 @@ import { logger, bot, chatId } from '../services.js';
 import { getOpenPositions } from '../order_executor/trader.js';
 import { getCurrentPrice } from '../data_extractor/jupiter.js';
 import { assetsToTrade } from '../config.js';
-import { getDynamicTrailingStop, getLatestMarketHealth } from '../bot.js';
+import { getLatestMarketHealth } from '../bot.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -98,14 +98,14 @@ async function getPositionsStatus(): Promise<string> {
         status += `  P&L: \`${pnlSign}${pnlPercent.toFixed(2)}%\` (${pnlSign}$${pnlUSDC.toFixed(2)})\n`;
 
         if (position.trailingStopActive && position.highestPrice) {
-            // Use dynamic trailing stop based on current market health
-            const trailingStopPercent = getDynamicTrailingStop(marketHealth);
+            // v2.12.0: Fixed 2.5% trailing stop (no longer dynamic)
+            const trailingStopPercent = 0.025; // Fixed 2.5%
             const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
             const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
             const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
             const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(decimals)}\` (${(trailingStopPercent * 100).toFixed(1)}% trail)\n`;
+            status += `  🎯 Trailing: \`$${trailingStopPrice.toFixed(decimals)}\` (2.5% fixed)\n`;
             status += `  💰 Potential P&L: \`${potentialPnlSign}${potentialPnlPercent.toFixed(2)}%\` (${potentialPnlSign}$${potentialPnlUSDC.toFixed(2)})\n`;
             status += `  📈 Highest: \`$${position.highestPrice.toFixed(decimals)}\`\n`;
         }

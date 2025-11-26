@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed trailing stop to fixed 2.5% in [src/bot.ts:226-227](src/bot.ts#L226-L227)
   - Updated `getDynamicTrailingStop()` to return fixed 0.025 in [src/bot.ts:41-42](src/bot.ts#L41-L42)
   - Updated logging to show token momentum and fixed trailing percentage
+  - Cleaned up Telegram notifications: removed "Momentum adj" from cycle summaries, changed `/status` to show "2.5% fixed" trailing
 
   **Expected Impact:**
   - Fewer but higher quality signals (stronger filters)

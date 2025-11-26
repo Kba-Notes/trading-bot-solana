@@ -1330,6 +1330,45 @@ git status --ignored | grep .env  # Verify .env ignored
      - SESSION_MEMORY.md: This chronological entry
    - **Status**: ✅ Ready for deployment - new strategy active
 
+---
+
+## Entry 44: v2.12.0 Telegram Message Cleanup (Nov 26, 2025)
+
+**Context**: After deploying v2.12.0, user noticed Telegram messages still showing outdated momentum adjustment and dynamic trailing stop information.
+
+**User Feedback**: *"check all type of messages that are sent to telegram to adapt info to the current strategy. For example I still get this message: 'Momentum adj: 0.00' info is not needed for the MH calculation"*
+
+**Problem**:
+  - Cycle summary messages displayed "Momentum adj: 0.00" (no longer calculated)
+  - `/status` command showed dynamic trailing percentage (now fixed at 2.5%)
+  - Confusing information that didn't match v2.12.0 strategy
+
+**Changes Implemented**:
+
+1. **Updated `sendAnalysisSummary()` in telegram.ts**:
+   - Removed momentum adjustment display logic (lines 332-337)
+   - Simplified to show only raw Market Health
+   - Updated AnalysisUpdate interface comments (lines 228-229)
+
+2. **Updated `/status` command in commandHandler.ts**:
+   - Changed from `getDynamicTrailingStop(marketHealth)` to fixed `0.025` (lines 101-102)
+   - Updated display text from dynamic percentage to "2.5% fixed" (line 108)
+   - Removed unused `getDynamicTrailingStop` import (line 6)
+   - Added v2.12.0 comment clarifying fixed trailing stop (line 101)
+
+**Result**:
+  - All Telegram messages now consistent with v2.12.0 strategy
+  - No confusing references to deprecated momentum adjustment
+  - Clear indication of fixed 2.5% trailing stop in position status
+
+**Files Modified**:
+  - `src/notifier/telegram.ts` lines 228-229, 332-337
+  - `src/notifier/commandHandler.ts` lines 6, 101-102, 108
+
+**Status**: ✅ Complete - Telegram messages aligned with v2.12.0 strategy
+
+---
+
 ### 📊 Current Strategy Configuration (v2.12.0)
 
 **Entry Conditions (v2.12.0 - COMPLETELY REVISED)**:
