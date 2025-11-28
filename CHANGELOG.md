@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.4] - 2025-11-26
+
+### Changed
+- **📉 Lowered Momentum Threshold** - Reduced from 1.0% to 0.65% to catch more bullish trends
+  - **User Feedback**: "we are missing some nice bullish immediate trends for the tokens"
+  - **Rationale**: 1% threshold was too high, filtering out valid early momentum signals
+  - **Change**: Token momentum must be > 0.65% (down from > 1.0%) to trigger buy
+  - **Expected Impact**:
+    - More buy signals (earlier entries into bullish trends)
+    - Better capture of immediate momentum shifts
+    - May slightly reduce win rate but improve overall opportunity capture
+    - Will catch tokens at 0.65%-0.99% momentum that were previously filtered
+  - **Implementation**: [src/bot.ts:362](src/bot.ts#L362)
+  - **Monitoring**: Watch for signal quality - can adjust further if needed
+
 ## [2.12.3] - 2025-11-26
 
 ### Added

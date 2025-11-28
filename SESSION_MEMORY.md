@@ -1684,4 +1684,47 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ---
 
+## Entry 48: v2.12.4 - Lowered Momentum Threshold for Earlier Entries (Nov 26, 2025)
+
+**User Feedback**: *"we need to change the threshold for the momentum in the token buy decision. currently it is set at 1% and it is too high. Let's change it down to 0.65% and see how it goes as we are missing some nice bullish immediate trends for the tokens"*
+
+**Problem Analysis**:
+- 1% momentum threshold was filtering out valid early bullish trends
+- Missing opportunities on tokens showing 0.65%-0.99% momentum
+- These tokens often continued upward after being filtered
+
+**Change Implemented**:
+- **Old**: `if (tokenMomentum <= 1.0)` - Required > 1% to trigger buy
+- **New**: `if (tokenMomentum <= 0.65)` - Requires > 0.65% to trigger buy
+- **Reduction**: 35% lower threshold (from 1.0% to 0.65%)
+
+**Files Modified**:
+- `src/bot.ts` line 362: Changed threshold from 1.0 to 0.65
+- `src/bot.ts` line 363: Updated log message "Below 0.65% threshold"
+- `src/bot.ts` line 368-369: Updated comments and logs to reflect new threshold
+
+**Expected Impact**:
+- ✅ **More signals**: Catches tokens at 0.65%-0.99% previously filtered
+- ✅ **Earlier entries**: Gets into bullish trends sooner
+- ✅ **Better opportunity capture**: Won't miss immediate bullish momentum
+- ⚠️ **Potential trade-off**: May slightly increase false positives (need monitoring)
+- 📊 **Adjustable**: Can fine-tune based on performance data
+
+**Reasoning**:
+- Averaged momentum formula (v2.12.2) already smooth, less noisy
+- Real-time Jupiter prices (v2.12.2) provide accurate minute-by-minute data
+- With 1-minute checking (v2.12.1), can catch and validate trends quickly
+- Multiple filters still in place: MH > 0.1, Golden Cross, 0.65% momentum
+- Risk managed by: Stop loss -1%, Trailing stop 2.5%, 1-minute monitoring
+
+**Monitoring Plan**:
+- Track signal quality over next 24-48 hours
+- Compare entry success rate vs v2.12.3
+- Can adjust to 0.5% or back to 0.8% based on results
+- User can request further adjustments
+
+**Status**: ✅ Complete - v2.12.4 active with 0.65% threshold
+
+---
+
 **Remember**: This information persists across sessions. Always refer to these files when starting a new session!

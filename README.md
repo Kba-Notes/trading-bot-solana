@@ -210,9 +210,15 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.12.3
+**Current Version:** 2.12.4
 
-### Latest Updates (v2.12.3 - Nov 26, 2025)
+### Latest Updates (v2.12.4 - Nov 26, 2025)
+- **📉 Lowered Momentum Threshold** - Reduced from 1.0% to 0.65% to catch more bullish trends
+  - Rationale: Missing early momentum signals on tokens at 0.65%-0.99%
+  - Expected: More buy signals, earlier entries, better opportunity capture
+  - Monitoring: Adjustable based on performance over next 24-48 hours
+
+### Previous Updates (v2.12.3 - Nov 26, 2025)
 - **💰 Manual Sell Command** - New `/sell <TOKEN>` command for on-demand position selling
   - Usage: `/sell JUP`, `/sell WIF`, `/sell PENG`, `/sell BONK`
   - Shows pre-sell confirmation with P&L estimate

@@ -358,15 +358,15 @@ async function checkTokenMomentumForBuy(): Promise<number> {
             logger.info(`    └─ Prices: T-2=$${priceT2.toFixed(8)} → T-1=$${priceT1.toFixed(8)} → T=$${priceT.toFixed(8)}`);
             logger.info(`    └─ Var1: ${variation1 > 0 ? '+' : ''}${variation1.toFixed(2)}%, Var2: ${variation2 > 0 ? '+' : ''}${variation2.toFixed(2)}%, Avg: ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
 
-            // Check momentum threshold
-            if (tokenMomentum <= 1.0) {
-                logger.info(`    └─ Below 1% threshold - HOLD`);
+            // Check momentum threshold (v2.12.4: lowered from 1.0% to 0.65% to catch more bullish trends)
+            if (tokenMomentum <= 0.65) {
+                logger.info(`    └─ Below 0.65% threshold - HOLD`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // Token has momentum > 1%, check Golden Cross
-            logger.info(`    └─ Above 1% threshold - Checking Golden Cross...`);
+            // Token has momentum > 0.65%, check Golden Cross
+            logger.info(`    └─ Above 0.65% threshold - Checking Golden Cross...`);
 
             // Fetch 5-min historical data for Golden Cross check
             const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
