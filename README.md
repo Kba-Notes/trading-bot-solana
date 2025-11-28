@@ -210,9 +210,17 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.12.4
+**Current Version:** 2.13.0
 
-### Latest Updates (v2.12.4 - Nov 26, 2025)
+### Latest Updates (v2.13.0 - Nov 28, 2025)
+- **🚀 Lowered Market Health Threshold** - Reduced from 0.1% to -0.5% to catch meme coin pumps
+  - Problem: Bot missed 4 simultaneous pumps (all had golden crosses, +2-4%)
+  - Root cause: MH was slightly negative (-0.17% to -0.01%) during pumps, bot was paused
+  - Solution: Now checks tokens even when BTC/ETH/SOL are slightly bearish
+  - Only pauses during severe market dumps (< -0.5%)
+  - Meme coins often pump independently of overall market sentiment
+
+### Previous Updates (v2.12.4 - Nov 26, 2025)
 - **📉 Lowered Momentum Threshold** - Reduced from 1.0% to 0.65% to catch more bullish trends
   - Rationale: Missing early momentum signals on tokens at 0.65%-0.99%
   - Expected: More buy signals, earlier entries, better opportunity capture

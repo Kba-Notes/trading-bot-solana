@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2025-11-28
+
+### Changed
+- **🚀 Lowered Market Health Threshold** - Reduced from 0.1% to -0.5% to catch meme coin pumps
+  - **Problem Identified**: Bot missed 4 simultaneous pumps (BONK, WIF, PENG, JUP) on 2025-11-28 at 14:20 CET
+    - All 4 tokens showed golden crosses and +2-4% pumps
+    - Market Health was -0.17% to -0.01% (slightly bearish)
+    - Bot was PAUSED for 17 minutes during the pumps
+    - Resumed at 14:37 CET when MH finally reached +0.26%
+  - **Root Cause**: Meme coins often pump independently of BTC/ETH/SOL
+    - MH > 0.1 requirement was too strict
+    - Individual token momentum can override overall market sentiment
+    - Waiting for BTC+ETH+SOL to all be bullish misses solo pumps
+  - **Solution**: Lowered MH threshold from **0.1%** to **-0.5%**
+    - Now checks tokens even during slight market bearishness
+    - Only pauses during severe market dumps (< -0.5%)
+    - Keeps MH calculation logic intact for future adjustments
+  - **Expected Impact**:
+    - ✅ Catch meme coin pumps even when BTC/ETH/SOL are slightly red
+    - ✅ Would have caught all 4 pumps today (MH ranged from -0.17% to -0.01%)
+    - ⚠️ May increase trades during mild market weakness (need monitoring)
+    - 📊 Can adjust to -0.3% or -0.7% based on results
+  - **Implementation**:
+    - [src/bot.ts:295](src/bot.ts#L295) - Token momentum check threshold
+    - [src/bot.ts:486](src/bot.ts#L486) - Status log message
+  - **Monitoring**: Track win rate over next 48 hours, adjust if needed
+
 ## [2.12.4] - 2025-11-26
 
 ### Changed

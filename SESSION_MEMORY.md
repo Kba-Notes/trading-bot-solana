@@ -1727,4 +1727,70 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ---
 
+## Entry 49: v2.13.0 - Lowered Market Health Threshold to -0.5% (Nov 28, 2025)
+
+**Context**: User showed 4 Binance charts (BONK, WIF, PENG, JUP) all pumping simultaneously but bot didn't catch any of them.
+
+**User Screenshots Analysis**:
+- Time: 14:59-15:00 CET (phone time)
+- Charts showed pumps at: ~14:20-14:30 CET (= 13:20-13:30 GMT in logs)
+- All 4 tokens: Golden Cross visible (MA12 > MA20 > MA26)
+- Price action: +2.03% (BONK), +3.68% (WIF), +3.56% (PENG), slight retrace (JUP)
+
+**Initial Confusion - Timezone**:
+- User correctly pointed out: *"logs are in GMT while the screenshots are in CET"*
+- CET = GMT+1
+- 14:20 CET = 13:20 GMT
+
+**Root Cause Analysis**:
+- Checked bot logs at 13:17-13:32 GMT (14:17-14:32 CET):
+  - 13:17 GMT: Market Health = **-0.17%** → Token checking **PAUSED**
+  - 13:22 GMT: Market Health = **-0.12%** → Token checking **PAUSED**
+  - 13:27 GMT: Market Health = **-0.01%** → Token checking **PAUSED**
+  - 13:32 GMT: Market Health = **0.05%** → Still **PAUSED** (< 0.1 threshold)
+  - 13:37 GMT: Market Health = **0.26%** → Finally **ACTIVE**
+
+**Critical Finding**:
+- Bot was **PAUSED for 17 minutes** during the pumps (13:20-13:37 GMT)
+- Pumps happened while MH was -0.17% to +0.05%
+- Never checked tokens because MH < 0.1 requirement
+- By the time bot resumed at 13:37, pumps were over
+
+**Problem Statement**:
+- Market Health filter (MH > 0.1) was **too strict**
+- Meme coins pump independently of BTC/ETH/SOL
+- Individual token momentum can override overall market sentiment
+- Waiting for BTC+ETH+SOL to ALL be bullish misses solo meme pumps
+
+**User Decision**: *"let's try by removing MH completely for sometime. Instead of removing all the logic of the MH calculation just put a very low threshold, -0.5"*
+
+**Implementation**:
+- Changed MH threshold from **0.1** to **-0.5**
+- Now checks tokens during slight market bearishness
+- Only pauses during severe dumps (< -0.5%)
+- Keeps all MH calculation logic intact for future tuning
+
+**Files Modified**:
+- `src/bot.ts` line 295: Changed `if (latestMarketHealth < 0.1)` to `if (latestMarketHealth < -0.5)`
+- `src/bot.ts` line 296: Updated log "< 0.1 (market bearish)" to "< -0.5 (severe market bearishness)"
+- `src/bot.ts` line 486: Changed `rawMarketHealth >= 0.1` to `rawMarketHealth >= -0.5`
+- `src/bot.ts` line 486: Updated log "Token checking PAUSED (bearish market)" to "PAUSED (severe bearish market)"
+
+**Expected Impact**:
+- ✅ Would have caught all 4 pumps today (MH was -0.17% to -0.01%, all > -0.5%)
+- ✅ Catches meme coin pumps even when BTC/ETH/SOL are slightly red
+- ✅ Still protected from trading during market crashes (< -0.5%)
+- ⚠️ May increase trade frequency during mild weakness
+- 📊 Can adjust to -0.3% (stricter) or -0.7% (looser) based on results
+
+**Testing Plan**:
+- Monitor win rate over next 48 hours
+- Track if trades during -0.5% < MH < 0.1% are profitable
+- Adjust threshold if needed based on data
+- User can request changes anytime
+
+**Status**: ✅ Complete - v2.13.0 active with -0.5% MH threshold
+
+---
+
 **Remember**: This information persists across sessions. Always refer to these files when starting a new session!

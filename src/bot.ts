@@ -290,10 +290,11 @@ async function checkOpenPositions() {
  * Uses averaged consecutive variations for more accurate momentum detection
  */
 async function checkTokenMomentumForBuy(): Promise<number> {
-    // Check if market is bullish (cached MH value from 5-min cycle)
-    if (latestMarketHealth < 0.1) {
-        logger.info(`[1-Min Check] Skipped - MH ${latestMarketHealth.toFixed(2)}% < 0.1 (market bearish)`);
-        return 0; // No checks when market is bearish
+    // v2.13.0: Lowered MH threshold to -0.5 (was 0.1) to catch meme coin pumps even during slight market bearishness
+    // Meme coins often pump independently of BTC/ETH/SOL
+    if (latestMarketHealth < -0.5) {
+        logger.info(`[1-Min Check] Skipped - MH ${latestMarketHealth.toFixed(2)}% < -0.5 (severe market bearishness)`);
+        return 0; // Only skip during severe market dumps
     }
 
     logger.info(`[1-Min Check] Starting token momentum scan (MH=${latestMarketHealth.toFixed(2)}%)...`);
@@ -482,7 +483,7 @@ async function main() {
 
                 executionCycleCounter++;
                 logger.info(`Execution cycle number ${executionCycleCounter}.`);
-                logger.info(`Market Health: ${rawMarketHealth.toFixed(2)}% - ${rawMarketHealth >= 0.1 ? 'Token momentum checking ACTIVE (1-min intervals)' : 'Token checking PAUSED (bearish market)'}`);
+                logger.info(`Market Health: ${rawMarketHealth.toFixed(2)}% - ${rawMarketHealth >= -0.5 ? 'Token momentum checking ACTIVE (1-min intervals)' : 'Token checking PAUSED (severe bearish market)'}`);
 
                 // Send analysis summary after each cycle (with log file)
                 const openPositions = getOpenPositions();
