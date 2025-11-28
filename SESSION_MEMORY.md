@@ -1794,3 +1794,116 @@ git status --ignored | grep .env  # Verify .env ignored
 ---
 
 **Remember**: This information persists across sessions. Always refer to these files when starting a new session!
+
+## Entry 50: v2.14.0 - Immediate Momentum (2-Period) + 0.55% Threshold (Nov 28, 2025)
+
+**Context**: Even with -0.5% MH threshold, bot was still missing pumps due to momentum averaging
+
+**User Observation**: *"we still miss the entrances...maybe we should reduce the momento down to analyzing 2 periods instead of 3. Check the variation2 here in all tokens...it was a lot, but we did not buy as the previous one wasn't that high"*
+
+**Example from Logs** (14:27:45 GMT = 15:27 CET):
+```
+PENG: Momentum +0.46%
+  └─ Var1: +0.08%, Var2: +0.84%, Avg: +0.46%
+  └─ Below 0.65% threshold - HOLD
+```
+
+**Problem Analysis**:
+- **Var2 = +0.84%** - IMMEDIATE pump happening RIGHT NOW
+- **Var1 = +0.08%** - Old momentum from 2 minutes ago (stale)
+- **Averaged = +0.46%** - Below 0.65% threshold, so bot held
+- **Result**: Missed pump because averaging diluted the immediate signal
+
+**Root Cause**:
+- 3-period momentum looked backward (T-2 → T-1 → T)
+- Calculated Var1 (T-2 to T-1) and Var2 (T-1 to T), then averaged
+- Old momentum (Var1) dragged down immediate momentum (Var2)
+- By the time averaging showed bullish momentum, pump was over
+
+**User Decision**:
+1. *"yes do so. And also reduce the threshold from 0.65 to 0.55%"*
+2. Simplify to 2-period immediate momentum
+3. Lower threshold to catch slightly weaker (but still valid) signals
+
+**Implementation**:
+
+**Part 1: Simplified to 2-Period Immediate Momentum**
+- **Old** (3-period with averaging):
+  - Track 3 prices: T-2, T-1, T (price history size = 3)
+  - Calculate: Var1 = (T-1 - T-2) / T-2
+  - Calculate: Var2 = (T - T-1) / T-1
+  - Momentum = (Var1 + Var2) / 2 (averaged)
+- **New** (2-period immediate):
+  - Track **only 2 prices**: T-1, T (price history size = 2)
+  - Momentum = **(T - T-1) / T-1 × 100** (immediate variation)
+  - No Var1, no Var2, no averaging
+  - Just the direct change from last period to now
+
+**Part 2: Lowered Threshold**
+- Changed from **0.65%** to **0.55%**
+- Combined with immediate momentum for maximum responsiveness
+
+**Files Modified**:
+- `src/bot.ts` line 30: Changed `const TOKEN_PRICE_HISTORY_SIZE = 3` to `2`
+- `src/bot.ts` line 31: Updated comment "last 2 prices" (was "last 3 prices")
+- `src/bot.ts` lines 327-362: Complete rewrite of momentum calculation
+  - History size check: `< 2` instead of `< 3`
+  - Removed T-2 variable
+  - Removed Var1 and Var2 calculations
+  - Removed averaging logic
+  - Direct calculation: `tokenMomentum = ((priceT - priceT1) / priceT1) * 100`
+  - Updated logging: Shows only "T-1={price} → T={price}" (no Var1/Var2/Avg)
+  - Changed threshold: `<= 0.55` instead of `<= 0.65`
+  - Updated log message: "Below 0.55% threshold" and "Above 0.55% threshold"
+
+**Before/After Comparison**:
+
+**Before** (v2.13.0 with 3-period averaging):
+```
+PENG: Momentum +0.46%
+  └─ Prices: T-2=0.00008341, T-1=0.00008348, T=0.00008418
+  └─ Var1: +0.08%, Var2: +0.84%, Avg: +0.46%
+  └─ Below 0.65% threshold - HOLD ❌
+```
+
+**After** (v2.14.0 with 2-period immediate):
+```
+PENG: Momentum +0.84%
+  └─ Prices: T-1=0.00008348 → T=0.00008418
+  └─ Above 0.55% threshold - Checking Golden Cross... ✅
+```
+
+**Expected Impact**:
+- ✅ **Would have caught PENG**: Immediate +0.84% > 0.55% threshold
+- ✅ **Faster response**: No lag from old momentum data
+- ✅ **Simpler logic**: Easier to understand and debug
+- ✅ **Better pump detection**: Catches momentum as it starts, not after averaging
+- ⚠️ **May increase signals**: More sensitive to immediate movements
+- 📊 **Monitoring needed**: Track if faster entries improve win rate
+
+**Why This Works**:
+- With 1-minute checking (v2.12.1), we get fresh prices every minute
+- Don't need averaging for smoothing - already have real-time data
+- Immediate momentum = what's happening NOW (not what happened 2 min ago)
+- Meme coin pumps happen FAST - need to catch them at the start
+- Golden Cross still filters for trend strength (this is just entry timing)
+
+**Testing Plan**:
+- Monitor signal quality over next 24-48 hours
+- Compare entry success rate vs v2.13.0
+- Watch for false positives from increased sensitivity
+- Can adjust threshold to 0.5% (looser) or 0.6% (stricter) if needed
+
+**Build & Deployment**:
+- Built with: `npm run build`
+- Restarted: `pm2 restart trading-bot`
+- Confirmed running with new logic
+
+**Documentation Updated**:
+- ✅ CHANGELOG.md: v2.14.0 entry with problem/solution/example
+- ✅ SESSION_MEMORY.md: This chronological entry (Entry 50)
+- ✅ README.md: Updated to version 2.14.0
+
+**Status**: ✅ Complete - v2.14.0 active with 2-period immediate momentum at 0.55% threshold
+
+---

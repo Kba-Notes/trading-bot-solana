@@ -28,7 +28,7 @@ const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impac
 const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
 
 // v2.12.2: Real-time price history for momentum calculation (Jupiter live prices)
-// Store last 3 prices per token for accurate momentum tracking
+// v2.14.0: Store last 2 prices per token for immediate momentum tracking (T-1 → T)
 interface PriceSnapshot {
     price: number;
     timestamp: Date;
@@ -327,47 +327,39 @@ async function checkTokenMomentumForBuy(): Promise<number> {
             // Add current price to history
             history.push({ price: currentPrice, timestamp: new Date() });
 
-            // Keep only last 3 prices
-            if (history.length > 3) {
+            // v2.14.0: Keep only last 2 prices (simplified from 3)
+            if (history.length > 2) {
                 history.shift();
             }
 
-            // Need at least 3 prices to calculate momentum
-            if (history.length < 3) {
-                logger.info(`  ${asset.name}: Building price history (${history.length}/3 prices)`);
+            // v2.14.0: Need only 2 prices for immediate momentum (T-1 → T)
+            if (history.length < 2) {
+                logger.info(`  ${asset.name}: Building price history (${history.length}/2 prices)`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // Calculate momentum using averaged consecutive variations
-            // T-2, T-1, T (current)
-            const priceT2 = history[0].price;  // 2 periods ago
-            const priceT1 = history[1].price;  // 1 period ago
-            const priceT = history[2].price;   // Current
+            // v2.14.0: Calculate immediate momentum (T-1 → T only, no averaging)
+            // This catches pumps as they happen, not diluted by older data
+            const priceT1 = history[0].price;  // 1 period ago
+            const priceT = history[1].price;   // Current
 
-            // Variation from T-2 to T-1
-            const variation1 = ((priceT1 - priceT2) / priceT2) * 100;
+            // Momentum = immediate variation from T-1 to T
+            const tokenMomentum = ((priceT - priceT1) / priceT1) * 100;
 
-            // Variation from T-1 to T
-            const variation2 = ((priceT - priceT1) / priceT1) * 100;
-
-            // Momentum = average of the two variations
-            const tokenMomentum = (variation1 + variation2) / 2;
-
-            // Log with detailed breakdown
+            // Log with immediate momentum
             logger.info(`  ${asset.name}: Momentum ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
-            logger.info(`    └─ Prices: T-2=$${priceT2.toFixed(8)} → T-1=$${priceT1.toFixed(8)} → T=$${priceT.toFixed(8)}`);
-            logger.info(`    └─ Var1: ${variation1 > 0 ? '+' : ''}${variation1.toFixed(2)}%, Var2: ${variation2 > 0 ? '+' : ''}${variation2.toFixed(2)}%, Avg: ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
+            logger.info(`    └─ Prices: T-1=$${priceT1.toFixed(8)} → T=$${priceT.toFixed(8)}`);
 
-            // Check momentum threshold (v2.12.4: lowered from 1.0% to 0.65% to catch more bullish trends)
-            if (tokenMomentum <= 0.65) {
-                logger.info(`    └─ Below 0.65% threshold - HOLD`);
+            // v2.14.0: Check momentum threshold (lowered from 0.65% to 0.55% for faster entries)
+            if (tokenMomentum <= 0.55) {
+                logger.info(`    └─ Below 0.55% threshold - HOLD`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // Token has momentum > 0.65%, check Golden Cross
-            logger.info(`    └─ Above 0.65% threshold - Checking Golden Cross...`);
+            // Token has momentum > 0.55%, check Golden Cross
+            logger.info(`    └─ Above 0.55% threshold - Checking Golden Cross...`);
 
             // Fetch 5-min historical data for Golden Cross check
             const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);

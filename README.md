@@ -210,9 +210,20 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.13.0
+**Current Version:** 2.14.0
 
-### Latest Updates (v2.13.0 - Nov 28, 2025)
+### Latest Updates (v2.14.0 - Nov 28, 2025)
+- **⚡ Immediate Momentum (2-Period)** - Simplified from 3-period averaging to 2-period immediate momentum
+  - Problem: Still missing pumps despite -0.5% MH threshold
+  - Root cause: 3-period averaging diluted immediate signals (Var2: +0.84% averaged to +0.46%)
+  - Solution: Track only last 2 prices (T-1 → T) for immediate momentum detection
+  - Formula: `(T - T-1) / T-1 × 100` (no averaging)
+  - Catches pumps as they start, not after they average out
+- **📉 Lowered Momentum Threshold** - Reduced from 0.65% to 0.55%
+  - Combined with 2-period momentum for maximum responsiveness
+  - Expected: Catch more early-stage pumps with faster entry timing
+
+### Previous Updates (v2.13.0 - Nov 28, 2025)
 - **🚀 Lowered Market Health Threshold** - Reduced from 0.1% to -0.5% to catch meme coin pumps
   - Problem: Bot missed 4 simultaneous pumps (all had golden crosses, +2-4%)
   - Root cause: MH was slightly negative (-0.17% to -0.01%) during pumps, bot was paused

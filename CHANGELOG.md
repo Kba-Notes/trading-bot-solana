@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2025-11-28
+
+### Changed
+- **⚡ Immediate Momentum (2-Period)** - Simplified from 3-period averaging to 2-period immediate momentum
+  - **Problem**: Still missing entries despite -0.5% MH threshold
+  - **User Analysis**: "check the variation2...it was a lot, but we did not buy as the previous one wasn't that high"
+  - **Example from logs (14:27:45)**:
+    - PENG: Var1=+0.08%, **Var2=+0.84%** (PUMPING!), Averaged=+0.46% → MISSED
+    - By averaging with old momentum (Var1), immediate pump signal (Var2) was diluted
+  - **Root Cause**: 3-period averaging looked backward, missing immediate pumps
+  - **Solution**: Use only **2 periods (T-1 → T)** for immediate momentum
+    - No averaging = catches pumps as they start
+    - Formula: `(T - T-1) / T-1 × 100`
+- **📉 Lowered Momentum Threshold** - Reduced from 0.65% to 0.55%
+  - Combined with 2-period momentum for maximum responsiveness
+- **Expected Impact**:
+  - ✅ Would have caught PENG at +0.84% (was filtered at +0.46%)
+  - ✅ Faster response to immediate price movements
+  - ⚠️ May increase signal frequency (monitoring needed)
+
 ## [2.13.0] - 2025-11-28
 
 ### Changed
