@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.2] - 2025-12-02
+
+### Fixed
+- **⚡ Spike Momentum Available Immediately** - No longer waits for trend momentum to be ready
+  - **Problem**: Bot waited 9 minutes for trend history (10 prices) even though spike was ready after 2 minutes
+    - Example from logs: `Spike: 2/2, Trend: 2/10` → Skipped checking spike
+    - Entry logic uses OR (Spike > 0.50% **OR** Trend > 0.20%) but code required BOTH ready
+  - **Impact**: 9-minute delay in spike detection after bot restart
+  - **Solution**: Check spike as soon as it's ready (2 minutes), add trend check when ready (10 minutes)
+  - **New behavior**:
+    - Minutes 0-2: Building spike history
+    - Minutes 2-10: Checking spike only (trend building)
+    - Minutes 10+: Checking both (OR logic)
+  - **Logging update**: Shows `Trend building (2/10)` when spike ready but trend not yet ready
+
+### Technical Details
+- Modified: `src/bot.ts` lines 380-418 - Changed from AND to proper OR logic
+- Logic: Skip only if `!hasSpikeMomentum` (not `!hasSpikeMomentum || !hasTrendMomentum`)
+- Trend check: `trendTriggered = hasTrendMomentum && trendMomentum > TREND_MOMENTUM_THRESHOLD`
+
 ## [2.15.1] - 2025-12-02
 
 ### Changed

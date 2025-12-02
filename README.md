@@ -210,9 +210,15 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.15.1
+**Current Version:** 2.15.2
 
-### Latest Updates (v2.15.1 - Dec 02, 2025)
+### Latest Updates (v2.15.2 - Dec 02, 2025)
+- **⚡ Spike Momentum No Longer Delayed** - Fixed 9-minute wait after bot restart
+  - Problem: Bot waited for trend (10 prices) even though spike only needs 2 prices
+  - Solution: Check spike as soon as ready (2 min), add trend when ready (10 min)
+  - Result: Spike detection starts immediately after 2 minutes, not 10 minutes
+
+### Previous Updates (v2.15.1 - Dec 02, 2025)
 - **🔍 Improved Trend Momentum** - Now measures average rate of change, not just total change
   - Problem: Old method (T-10 → T) couldn't distinguish steady trends from "flat + spike"
   - Solution: Average of 9 consecutive period-to-period variations

@@ -377,24 +377,35 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                 hasTrendMomentum = true;
             }
 
-            // Log momentum status
-            if (!hasSpikeMomentum || !hasTrendMomentum) {
+            // v2.15.2: Check if at least spike is ready (OR logic means we can proceed with just spike)
+            if (!hasSpikeMomentum) {
                 logger.info(`  ${asset.name}: Building price history (Spike: ${spikeHistory.length}/${SPIKE_HISTORY_SIZE}, Trend: ${trendHistory.length}/${TREND_HISTORY_SIZE})`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // v2.15.0: Log both momentums
-            logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend ${trendMomentum > 0 ? '+' : ''}${trendMomentum.toFixed(2)}% (avg)`);
-            logger.info(`    └─ Spike (2-min): $${spikeHistory[0].price.toFixed(8)} → $${spikeHistory[1].price.toFixed(8)}`);
-            logger.info(`    └─ Trend (10-min avg): $${trendHistory[0].price.toFixed(8)} → $${trendHistory[trendHistory.length - 1].price.toFixed(8)}`);
+            // v2.15.2: Log available momentums
+            if (hasTrendMomentum) {
+                // Both ready
+                logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend ${trendMomentum > 0 ? '+' : ''}${trendMomentum.toFixed(2)}% (avg)`);
+                logger.info(`    └─ Spike (2-min): $${spikeHistory[0].price.toFixed(8)} → $${spikeHistory[1].price.toFixed(8)}`);
+                logger.info(`    └─ Trend (10-min avg): $${trendHistory[0].price.toFixed(8)} → $${trendHistory[trendHistory.length - 1].price.toFixed(8)}`);
+            } else {
+                // Only spike ready
+                logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend building (${trendHistory.length}/${TREND_HISTORY_SIZE})`);
+                logger.info(`    └─ Spike (2-min): $${spikeHistory[0].price.toFixed(8)} → $${spikeHistory[1].price.toFixed(8)}`);
+            }
 
-            // v2.15.0: Check if EITHER momentum threshold is met
+            // v2.15.2: Check available momentum thresholds (OR logic)
             const spikeTriggered = spikeMomentum > SPIKE_MOMENTUM_THRESHOLD;
-            const trendTriggered = trendMomentum > TREND_MOMENTUM_THRESHOLD;
+            const trendTriggered = hasTrendMomentum && trendMomentum > TREND_MOMENTUM_THRESHOLD;
 
             if (!spikeTriggered && !trendTriggered) {
-                logger.info(`    └─ No momentum signal - HOLD (Spike: ${spikeMomentum.toFixed(2)}% ≤ ${SPIKE_MOMENTUM_THRESHOLD}%, Trend: ${trendMomentum.toFixed(2)}% ≤ ${TREND_MOMENTUM_THRESHOLD}%)`);
+                if (hasTrendMomentum) {
+                    logger.info(`    └─ No momentum signal - HOLD (Spike: ${spikeMomentum.toFixed(2)}% ≤ ${SPIKE_MOMENTUM_THRESHOLD}%, Trend: ${trendMomentum.toFixed(2)}% ≤ ${TREND_MOMENTUM_THRESHOLD}%)`);
+                } else {
+                    logger.info(`    └─ No momentum signal - HOLD (Spike: ${spikeMomentum.toFixed(2)}% ≤ ${SPIKE_MOMENTUM_THRESHOLD}%)`);
+                }
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }

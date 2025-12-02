@@ -2223,3 +2223,183 @@ New: PENG: Spike +0.67% | Trend +0.23% (avg)
 **Status**: ✅ Complete - v2.15.1 active with averaged consecutive variations for trend momentum
 
 ---
+
+## Entry 53: v2.15.2 - Fixed Spike Momentum Delay (OR Logic Bug) (Dec 02, 2025)
+
+**Context**: User noticed spike momentum wasn't being checked until trend momentum was ready
+
+**User Observation**: *"check the logs since 2025-12-02 15:59:13 (the last bot restart)... it seems like the spike momentum is not calculated till we have 10 values for the trend momentum. Since we are doing an or operation... to calculate the spike momentum we should not need to wait till the trend momentum is calculated"*
+
+**Problem Identified from Logs**:
+
+**After Bot Restart** (15:29-15:39):
+```
+15:29:44 -> JUP: Building price history (Spike: 1/2, Trend: 1/10)
+15:30:57 -> JUP: Building price history (Spike: 2/2, Trend: 2/10)  ← Spike READY!
+15:32:10 -> JUP: Building price history (Spike: 2/2, Trend: 3/10)  ← Still waiting...
+15:33:23 -> JUP: Building price history (Spike: 2/2, Trend: 4/10)
+15:34:35 -> JUP: Building price history (Spike: 2/2, Trend: 5/10)
+15:35:48 -> JUP: Building price history (Spike: 2/2, Trend: 6/10)
+15:37:01 -> JUP: Building price history (Spike: 2/2, Trend: 7/10)
+15:38:13 -> JUP: Building price history (Spike: 2/2, Trend: 8/10)
+15:39:24 -> JUP: Building price history (Spike: 2/2, Trend: 9/10)  ← 9 minutes wasted!
+```
+
+**Analysis**:
+- Spike momentum ready after **2 minutes** (Spike: 2/2)
+- Bot kept waiting for trend momentum to reach 10/10
+- **9 minutes wasted** not checking spike!
+- Entry logic uses **OR**: (Spike > 0.50% **OR** Trend > 0.20%)
+- But code logic used **AND**: Required BOTH to be ready
+
+**Root Cause - Bad Logic**:
+
+**v2.15.1 Code** (lines 381-385):
+```typescript
+// Log momentum status
+if (!hasSpikeMomentum || !hasTrendMomentum) {
+    logger.info(`Building price history...`);
+    await sleep(API_DELAYS.RATE_LIMIT);
+    continue;
+}
+```
+
+**Problem**: `if (!hasSpikeMomentum || !hasTrendMomentum)`
+- This means: Skip if spike is missing **OR** trend is missing
+- In other words: Only proceed if BOTH are ready (AND logic)
+- But entry condition uses OR logic!
+
+**Entry Condition Logic**:
+```
+BUY if:
+  ✓ Golden Cross (SMA12 > SMA26)
+  ✓ Market Health > -0.5%
+  ✓ (Spike > 0.50% OR Trend > 0.20%)  ← OR logic
+```
+
+**Code Logic** (v2.15.1):
+```
+Check if (Spike ready AND Trend ready)  ← AND logic (bug!)
+```
+
+**Mismatch**: Entry uses OR, but code checks AND!
+
+**Solution**: Check spike as soon as it's ready, add trend check when ready
+
+**v2.15.2 Fix** (lines 380-418):
+
+**New Logic**:
+```typescript
+// v2.15.2: Check if at least spike is ready (OR logic means we can proceed with just spike)
+if (!hasSpikeMomentum) {
+    logger.info(`Building price history...`);
+    await sleep(API_DELAYS.RATE_LIMIT);
+    continue;
+}
+
+// v2.15.2: Log available momentums
+if (hasTrendMomentum) {
+    // Both ready
+    logger.info(`Spike +X% | Trend +Y% (avg)`);
+} else {
+    // Only spike ready
+    logger.info(`Spike +X% | Trend building (2/10)`);
+}
+
+// v2.15.2: Check available momentum thresholds (OR logic)
+const spikeTriggered = spikeMomentum > SPIKE_MOMENTUM_THRESHOLD;
+const trendTriggered = hasTrendMomentum && trendMomentum > TREND_MOMENTUM_THRESHOLD;
+
+if (!spikeTriggered && !trendTriggered) {
+    // Neither triggered - HOLD
+    if (hasTrendMomentum) {
+        logger.info(`No momentum signal - HOLD (Spike: X%, Trend: Y%)`);
+    } else {
+        logger.info(`No momentum signal - HOLD (Spike: X%)`);
+    }
+    continue;
+}
+```
+
+**Key Changes**:
+1. **Skip condition**: Changed from `if (!hasSpikeMomentum || !hasTrendMomentum)` to `if (!hasSpikeMomentum)`
+   - Now only skips if spike is NOT ready
+   - Proceeds as soon as spike has 2 prices
+2. **Conditional logging**: Shows what's available (spike only, or both)
+3. **Trend check**: `trendTriggered = hasTrendMomentum && trendMomentum > TREND_MOMENTUM_THRESHOLD`
+   - Only checks trend threshold if trend is ready
+   - Allows spike-only checking
+
+**New Behavior Timeline**:
+
+**Minutes 0-2**: Building spike history
+```
+JUP: Building price history (Spike: 1/2, Trend: 1/10)
+```
+
+**Minutes 2-10**: Spike ready, trend building
+```
+JUP: Spike +0.67% | Trend building (3/10)
+  └─ Spike (2-min): $X → $Y
+  └─ ⚡ MOMENTUM SIGNAL: SPIKE (0.67% > 0.50%) - Checking Golden Cross...
+```
+
+**Minutes 10+**: Both ready
+```
+JUP: Spike +0.35% | Trend +1.98% (avg)
+  └─ Spike (2-min): $X → $Y
+  └─ Trend (10-min avg): $Z → $Y
+  └─ ⚡ MOMENTUM SIGNAL: TREND (1.98% > 0.2%) - Checking Golden Cross...
+```
+
+**Verification from Logs** (After v2.15.2 restart at 16:15):
+
+**After 2 minutes** (16:16:55):
+```
+JUP: Spike -0.07% | Trend building (2/10)
+  └─ Spike (2-min): $0.24789812 → $0.24772460
+  └─ No momentum signal - HOLD (Spike: -0.07% ≤ 0.5%)
+
+WIF: Spike -0.07% | Trend building (2/10)
+  └─ Spike (2-min): $0.39871068 → $0.39843755
+  └─ No momentum signal - HOLD (Spike: -0.07% ≤ 0.5%)
+```
+
+**Result**: ✅ **Spike is checked after 2 minutes!** (Trend still building)
+
+**Impact**:
+
+**Before (v2.15.1)**:
+- After restart: 9-minute delay before any momentum checking
+- Missed fast pumps during the first 9 minutes
+
+**After (v2.15.2)**:
+- After restart: 2-minute delay before spike checking starts
+- **7 minutes earlier detection** of fast pumps
+- Trend checking added at 10 minutes (both available)
+
+**Benefits**:
+- ✅ Proper OR logic implementation (matches entry condition)
+- ✅ Faster spike detection after restart (2 min vs 10 min)
+- ✅ No missed pumps during trend history building
+- ✅ Both detectors work independently (as designed)
+
+**Files Modified**:
+- `src/bot.ts` lines 380-418: Rewritten momentum checking logic
+  - Changed skip condition from AND to proper OR
+  - Added conditional logging based on what's available
+  - Trend check only if trend is ready
+
+**Build & Deployment**:
+- Built successfully with: `npm run build`
+- Restarted: `pm2 restart trading-bot`
+- Verified in logs: Spike checking starts at 2 minutes
+
+**Documentation Updated**:
+- ✅ CHANGELOG.md: v2.15.2 entry with problem/solution
+- ✅ SESSION_MEMORY.md: This chronological entry (Entry 53)
+- ✅ README.md: Updated to version 2.15.2
+
+**Status**: ✅ Complete - v2.15.2 active with proper OR logic for spike/trend checking
+
+---
