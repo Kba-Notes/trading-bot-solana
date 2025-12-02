@@ -2403,3 +2403,223 @@ WIF: Spike -0.07% | Trend building (2/10)
 **Status**: ✅ Complete - v2.15.2 active with proper OR logic for spike/trend checking
 
 ---
+
+## Entry 54: v2.16.0 - Manual Trading Commands (/buy, /stop, /start) (Dec 02, 2025)
+
+**User Request**: *"I need you to create new commands for the telegram bot. /buy <TOKEN> --> same as we have now with /sell <TOKEN> but to manually buy a token. /stop --> to manually stop the bot. /start --> to manually start the bot. I guess that if the bot is stopped it will not read telegram commands, so /start would not work. Is there an easy fix for that?"*
+
+**User's Insight**: Correctly identified the /start problem - if bot process is stopped, it can't receive Telegram messages
+
+**Solution Strategy**: Smart pause (not full stop)
+
+Instead of killing the bot process (which would make `/start` impossible):
+- **`/stop`** → **Pauses trading** (sets `isBotPaused = true`)
+  - No new buy signals processed
+  - Positions still monitored (trailing stops work)
+  - Telegram remains responsive
+  - Bot process keeps running
+- **`/start`** → **Resumes trading** (sets `isBotPaused = false`)
+  - Re-enables buy signal processing
+  - Works because bot never stopped
+
+**Implementation**:
+
+### Part 1: Pause State Management
+
+**Added to `src/bot.ts` (line 24)**:
+```typescript
+let isBotPaused = false; // Trading pause state (controlled by /stop and /start commands)
+```
+
+**Exported Functions** (lines 71-81):
+```typescript
+export function isTradingPaused(): boolean {
+    return isBotPaused;
+}
+
+export function setTradingPaused(paused: boolean): void {
+    isBotPaused = paused;
+    logger.info(`Trading ${paused ? 'PAUSED' : 'RESUMED'} via command`);
+}
+```
+
+**Pause Check in Buy Logic** (lines 316-320):
+```typescript
+async function checkTokenMomentumForBuy(): Promise<number> {
+    // Check if trading is paused via /stop command
+    if (isBotPaused) {
+        logger.info(`[1-Min Check] Skipped - Trading PAUSED (use /start to resume)`);
+        return 0;
+    }
+    // ... rest of buy logic
+}
+```
+
+### Part 2: /buy Command
+
+**Added to `src/notifier/commandHandler.ts` (lines 256-324)**:
+
+**Flow**:
+1. Validate token name format
+2. Check if trading is paused (prevent buy if paused)
+3. Find asset configuration
+4. Check if position already exists (prevent duplicate)
+5. Get current price
+6. Show confirmation message with price and amount
+7. Execute buy order via `executeBuyOrder()`
+8. Send success/failure notification
+
+**Key Features**:
+- Uses `strategyConfig.tradeAmountUSDC` (same as automated buys)
+- Checks trading pause state first
+- Validates no existing position
+- Sends confirmation before executing
+- Trigger reason: `MANUAL (via /buy command)`
+
+**Example Usage**:
+```
+User: /buy PENG
+
+Bot: 🔄 Manual Buy Initiated
+
+Token: PENG
+Price: $0.01028504
+Amount: 500 USDC
+
+Executing buy order...
+
+Bot: 🟢 BUY - PENG
+Entry: $0.01028504
+Amount: 500 USDC
+Reason: MANUAL (via /buy command)
+```
+
+### Part 3: /stop Command
+
+**Added to `src/notifier/commandHandler.ts` (lines 326-343)**:
+
+**Functionality**:
+- Sets `isBotPaused = true` via `setTradingPaused(true)`
+- Checks if already paused (prevents redundant calls)
+- Sends detailed status message
+
+**Response Message**:
+```
+⏸️ Trading PAUSED
+
+✅ No new buy signals will be processed
+✅ Open positions still monitored
+✅ Trailing stops still active
+✅ Telegram commands still work
+
+Use /start to resume trading.
+```
+
+**What Continues to Work**:
+- Position monitoring (every 1 minute)
+- Trailing stop checks
+- Sell executions (if stops hit)
+- All Telegram commands (`/status`, `/logs`, `/sell`, `/start`)
+
+**What Stops**:
+- Buy signal processing
+- New position entries
+- Token momentum checking
+
+### Part 4: /start Command
+
+**Added to `src/notifier/commandHandler.ts` (lines 345-362)**:
+
+**Functionality**:
+- Sets `isBotPaused = false` via `setTradingPaused(false)`
+- Checks if already active (prevents redundant calls)
+- Sends confirmation message
+
+**Response Message**:
+```
+▶️ Trading RESUMED
+
+✅ Buy signals will be processed
+✅ Bot will check momentum every minute
+✅ All strategies active
+
+Use /stop to pause trading.
+```
+
+### Part 5: Updated /help Command
+
+**Updated `src/notifier/commandHandler.ts` (lines 387-405)**:
+
+**Added to help text**:
+```
+💵 /buy <TOKEN> - Manually buy a token
+  • /buy JUP - Buy JUP with configured amount
+  • /buy WIF - Buy WIF with configured amount
+  • Shows price and amount before executing
+
+⏸️ /stop - Pause trading
+  • Stops processing new buy signals
+  • Positions still monitored and protected
+  • Telegram commands still work
+
+▶️ /start - Resume trading
+  • Resumes processing buy signals
+  • Re-enables all strategies
+```
+
+**Files Modified**:
+- `src/bot.ts` lines 24, 71-81, 316-320: Pause state management
+- `src/notifier/commandHandler.ts`:
+  - Lines 3-6: Updated imports
+  - Lines 256-324: `/buy` command implementation
+  - Lines 326-343: `/stop` command implementation
+  - Lines 345-362: `/start` command implementation
+  - Lines 387-405: Updated `/help` text
+
+**Why This Approach is Better Than Full Stop**:
+
+**Traditional /stop** (kill process):
+- ❌ Bot process exits
+- ❌ Telegram connection dies
+- ❌ Can't receive `/start` command
+- ❌ Need external script or PM2 to restart
+- ❌ Positions not monitored during stop
+- ❌ Trailing stops not checked
+
+**Our /stop** (smart pause):
+- ✅ Bot process keeps running
+- ✅ Telegram connection alive
+- ✅ Can receive `/start` command
+- ✅ No external restart needed
+- ✅ Positions continuously monitored
+- ✅ Trailing stops always checked
+
+**Use Cases**:
+
+1. **Volatile Market**: `/stop` to pause during uncertainty, `/start` when stable
+2. **Manual Trading**: `/stop` automated, use `/buy` and `/sell` manually
+3. **Break Time**: `/stop` before sleep, `/start` in morning
+4. **Strategy Adjustment**: `/stop`, observe, `/start` when ready
+5. **Emergency**: `/stop` immediately if something looks wrong
+
+**Benefits**:
+- ✅ Full manual control over trading
+- ✅ Buy any monitored token on demand
+- ✅ Pause/resume without killing bot
+- ✅ Positions always protected (even when paused)
+- ✅ No need to SSH or restart PM2
+- ✅ All control via Telegram
+
+**Build & Deployment**:
+- Built successfully with: `npm run build`
+- Restarted: `pm2 restart trading-bot`
+- All commands functional
+
+**Documentation Updated**:
+- ✅ CHANGELOG.md: v2.16.0 entry
+- ✅ SESSION_MEMORY.md: This entry (Entry 54)
+- ✅ README.md: Updated to version 2.16.0
+
+**Status**: ✅ Complete - v2.16.0 active with `/buy`, `/stop`, and `/start` commands
+
+---

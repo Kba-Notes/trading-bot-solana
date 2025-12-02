@@ -210,9 +210,17 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.15.2
+**Current Version:** 2.16.0
 
-### Latest Updates (v2.15.2 - Dec 02, 2025)
+### Latest Updates (v2.16.0 - Dec 02, 2025)
+- **🎮 Manual Trading Commands** - Full control via Telegram
+  - `/buy <TOKEN>` - Manually buy any monitored token
+  - `/sell <TOKEN>` - Manually sell open positions (existing)
+  - `/stop` - Pause trading (positions still monitored, Telegram works)
+  - `/start` - Resume trading (works because bot stays running)
+  - Result: Full manual control without stopping the bot process
+
+### Previous Updates (v2.15.2 - Dec 02, 2025)
 - **⚡ Spike Momentum No Longer Delayed** - Fixed 9-minute wait after bot restart
   - Problem: Bot waited for trend (10 prices) even though spike only needs 2 prices
   - Solution: Check spike as soon as ready (2 min), add trend when ready (10 min)

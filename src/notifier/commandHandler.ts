@@ -1,9 +1,9 @@
 // src/notifier/commandHandler.ts
 import { logger, bot, chatId } from '../services.js';
-import { getOpenPositions, executeSellOrder } from '../order_executor/trader.js';
+import { getOpenPositions, executeSellOrder, executeBuyOrder } from '../order_executor/trader.js';
 import { getCurrentPrice } from '../data_extractor/jupiter.js';
-import { assetsToTrade } from '../config.js';
-import { getLatestMarketHealth } from '../bot.js';
+import { assetsToTrade, strategyConfig } from '../config.js';
+import { getLatestMarketHealth, isTradingPaused, setTradingPaused } from '../bot.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -253,6 +253,114 @@ export function initializeCommandHandlers(): void {
         }
     });
 
+    // /buy command - manually buy a token
+    bot.onText(/^\/buy\s+([A-Za-z0-9]+)$/i, async (msg, match) => {
+        // Only respond to authorized chat
+        if (msg.chat.id.toString() !== chatId) {
+            logger.warn(`Unauthorized command attempt from chat ID: ${msg.chat.id}`);
+            return;
+        }
+
+        if (!match || !match[1]) {
+            bot?.sendMessage(chatId, '⚠️ Invalid format.\n\nUsage: `/buy <TOKEN>`\nExample: `/buy JUP`', { parse_mode: 'Markdown' });
+            return;
+        }
+
+        const tokenName = match[1].toUpperCase();
+        logger.info(`Received /buy command from user for token: ${tokenName}`);
+
+        try {
+            // Check if trading is paused
+            if (isTradingPaused()) {
+                bot?.sendMessage(chatId, '⚠️ *Trading is PAUSED*\n\nUse `/start` to resume trading before buying.', { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Find the asset configuration
+            const assetConfig = assetsToTrade.find(a => a.name.toUpperCase() === tokenName);
+            if (!assetConfig) {
+                const availableTokens = assetsToTrade.map(a => a.name).join(', ');
+                bot?.sendMessage(chatId, `⚠️ Unknown token: *${tokenName}*\n\nAvailable tokens: ${availableTokens}`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Check if position already exists
+            const positions = getOpenPositions();
+            const existingPosition = positions.find(p => p.asset === assetConfig.mint);
+
+            if (existingPosition) {
+                bot?.sendMessage(chatId, `⚠️ Position already exists for *${tokenName}*\n\nUse \`/status\` to see current positions.\nUse \`/sell ${tokenName}\` to close the position first.`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            // Get current price for confirmation message
+            const currentPrice = await getCurrentPrice(assetConfig.mint);
+            if (!currentPrice) {
+                bot?.sendMessage(chatId, `❌ Failed to get current price for *${tokenName}*. Cannot execute manual buy.`, { parse_mode: 'Markdown' });
+                return;
+            }
+
+            const decimals = currentPrice < 0.01 ? 8 : 6;
+            const amount = strategyConfig.tradeAmountUSDC;
+
+            // Send confirmation that buy is being executed
+            bot?.sendMessage(chatId, `🔄 *Manual Buy Initiated*\n\nToken: ${tokenName}\nPrice: $${currentPrice.toFixed(decimals)}\nAmount: ${amount} USDC\n\n_Executing buy order..._`, { parse_mode: 'Markdown' });
+
+            // Execute the buy order
+            logger.info(`Executing manual buy order for ${tokenName}`);
+            const success = await executeBuyOrder(assetConfig.mint, amount, currentPrice, `MANUAL (via /buy command)`);
+
+            if (success) {
+                logger.info(`✅ Manual buy order completed successfully for ${tokenName}`);
+                // Note: executeBuyOrder already sends trade notification
+            } else {
+                logger.error(`❌ Manual buy order failed for ${tokenName}`);
+                bot?.sendMessage(chatId, `❌ *Manual Buy Failed*\n\nToken: ${tokenName}\n\nPlease check logs for details. No position was opened.`, { parse_mode: 'Markdown' });
+            }
+        } catch (error) {
+            logger.error('Error handling /buy command:', error);
+            bot?.sendMessage(chatId, '❌ Error executing manual buy. Check bot logs for details.');
+        }
+    });
+
+    // /stop command - pause trading
+    bot.onText(/^\/stop$/, (msg) => {
+        // Only respond to authorized chat
+        if (msg.chat.id.toString() !== chatId) {
+            logger.warn(`Unauthorized command attempt from chat ID: ${msg.chat.id}`);
+            return;
+        }
+
+        logger.info('Received /stop command from user');
+
+        if (isTradingPaused()) {
+            bot?.sendMessage(chatId, '⚠️ Trading is already paused.\n\nUse `/start` to resume.', { parse_mode: 'Markdown' });
+            return;
+        }
+
+        setTradingPaused(true);
+        bot?.sendMessage(chatId, `⏸️ *Trading PAUSED*\n\n✅ No new buy signals will be processed\n✅ Open positions still monitored\n✅ Trailing stops still active\n✅ Telegram commands still work\n\nUse \`/start\` to resume trading.`, { parse_mode: 'Markdown' });
+    });
+
+    // /start command - resume trading
+    bot.onText(/^\/start$/, (msg) => {
+        // Only respond to authorized chat
+        if (msg.chat.id.toString() !== chatId) {
+            logger.warn(`Unauthorized command attempt from chat ID: ${msg.chat.id}`);
+            return;
+        }
+
+        logger.info('Received /start command from user');
+
+        if (!isTradingPaused()) {
+            bot?.sendMessage(chatId, '✅ Trading is already active.\n\nUse `/stop` to pause.', { parse_mode: 'Markdown' });
+            return;
+        }
+
+        setTradingPaused(false);
+        bot?.sendMessage(chatId, `▶️ *Trading RESUMED*\n\n✅ Buy signals will be processed\n✅ Bot will check momentum every minute\n✅ All strategies active\n\nUse \`/stop\` to pause trading.`, { parse_mode: 'Markdown' });
+    });
+
     // /help command - shows available commands
     bot.onText(/^\/help$/, (msg) => {
         // Only respond to authorized chat
@@ -276,10 +384,24 @@ export function initializeCommandHandlers(): void {
   • Displays P&L, entry/current prices
   • Shows trailing stop info
 
+💵 */buy <TOKEN>* - Manually buy a token
+  • \`/buy JUP\` - Buy JUP with configured amount
+  • \`/buy WIF\` - Buy WIF with configured amount
+  • Shows price and amount before executing
+
 💰 */sell <TOKEN>* - Manually sell a position
   • \`/sell JUP\` - Sell open JUP position
   • \`/sell WIF\` - Sell open WIF position
   • Shows current P&L before executing
+
+⏸️ */stop* - Pause trading
+  • Stops processing new buy signals
+  • Positions still monitored and protected
+  • Telegram commands still work
+
+▶️ */start* - Resume trading
+  • Resumes processing buy signals
+  • Re-enables all strategies
 
 ❓ */help* - Show this help message
 

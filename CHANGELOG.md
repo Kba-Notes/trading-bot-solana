@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] - 2025-12-02
+
+### Added
+- **🎮 Manual Trading Commands** - Full control over bot via Telegram
+  - **`/buy <TOKEN>`** - Manually buy a token
+    - Usage: `/buy JUP`, `/buy WIF`, `/buy PENG`, `/buy BONK`
+    - Shows price and amount before executing
+    - Checks if position already exists
+    - Prevents buy if trading is paused
+    - Uses configured trade amount from strategy config
+  - **`/stop`** - Pause trading (smart pause, not full stop)
+    - Stops processing new buy signals
+    - Positions still monitored (trailing stops active)
+    - Telegram remains responsive
+    - Allows `/start` to work (bot still running)
+  - **`/start`** - Resume trading
+    - Re-enables buy signal processing
+    - Resumes all strategies
+    - Works because bot never actually stopped
+
+### Technical Implementation
+- **Pause State Management**:
+  - Added `isBotPaused` flag in `src/bot.ts`
+  - Exported `isTradingPaused()` and `setTradingPaused()` functions
+  - Check pause state before processing buy signals
+  - Logs show "Trading PAUSED" when skipping buy checks
+- **Manual Buy Logic**:
+  - Similar flow to `/sell` command
+  - Validates token, checks existing positions
+  - Gets current price for confirmation
+  - Executes via `executeBuyOrder()` with "MANUAL" trigger reason
+- **Updated `/help`** to include all new commands
+
+### Why /start Works After /stop
+Traditional `/stop` kills the process → Telegram can't receive `/start`
+
+Our solution:
+- `/stop` sets `isBotPaused = true` (pauses trading logic)
+- Bot process keeps running (monitors positions, checks Telegram)
+- `/start` sets `isBotPaused = false` (resumes trading)
+- Result: Full control without killing the bot
+
+### Benefits
+- ✅ Manual entry/exit on any monitored token
+- ✅ Pause trading during volatile markets
+- ✅ Resume when conditions improve
+- ✅ No need to restart PM2 process
+- ✅ Positions always protected (even when paused)
+
 ## [2.15.2] - 2025-12-02
 
 ### Fixed

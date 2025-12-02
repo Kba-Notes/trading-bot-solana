@@ -21,6 +21,7 @@ import { getErrorMessage, getErrorContext } from './errors/custom-errors.js';
 
 let executionCycleCounter = 0;
 let latestMarketHealth = 0; // Store latest market health for dynamic trailing stops
+let isBotPaused = false; // Trading pause state (controlled by /stop and /start commands)
 
 // Momentum-based Market Health adjustment (v2.11.0: Optimized to 2-cycle)
 const MH_HISTORY_SIZE = 2; // Track last 2 periods (10 minutes) - optimal from 60-trade analysis
@@ -62,6 +63,21 @@ export function getDynamicTrailingStop(marketHealth: number): number {
  */
 export function getLatestMarketHealth(): number {
     return latestMarketHealth;
+}
+
+/**
+ * Get bot pause state (used by command handlers)
+ */
+export function isTradingPaused(): boolean {
+    return isBotPaused;
+}
+
+/**
+ * Set bot pause state (used by /stop and /start commands)
+ */
+export function setTradingPaused(paused: boolean): void {
+    isBotPaused = paused;
+    logger.info(`Trading ${paused ? 'PAUSED' : 'RESUMED'} via command`);
 }
 
 /**
@@ -297,6 +313,12 @@ async function checkOpenPositions() {
  * Uses averaged consecutive variations for more accurate momentum detection
  */
 async function checkTokenMomentumForBuy(): Promise<number> {
+    // Check if trading is paused via /stop command
+    if (isBotPaused) {
+        logger.info(`[1-Min Check] Skipped - Trading PAUSED (use /start to resume)`);
+        return 0;
+    }
+
     // v2.13.0: Lowered MH threshold to -0.5 (was 0.1) to catch meme coin pumps even during slight market bearishness
     // Meme coins often pump independently of BTC/ETH/SOL
     if (latestMarketHealth < -0.5) {
