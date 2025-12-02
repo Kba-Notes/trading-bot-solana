@@ -189,7 +189,7 @@ async function performJupiterSwap(inputMint: string, outputMint: string, amount:
  * @param retryCount Current retry attempt (used internally)
  * @throws Error if validation fails or position limit exceeded
  */
-export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number, retryCount: number = 0): Promise<boolean> {
+export async function executeBuyOrder(assetMint: string, amountUSDC: number, price: number, triggerReason?: string, retryCount: number = 0): Promise<boolean> {
     const MAX_RETRIES = 3;
     // Exponential backoff: 5s, 10s, 20s (capped at 30s)
     const getRetryDelay = (attempt: number) => Math.min(5000 * Math.pow(2, attempt), 30000);
@@ -250,7 +250,7 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
             action: 'BUY',
             price: price,
             amount: amountUSDC,
-            reason: 'Strategy signal confirmed.',
+            reason: triggerReason || 'Strategy signal confirmed.',
             indicators: {
                 // Indicators will be added by the calling function if available
             }
@@ -263,7 +263,7 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
             const retryDelay = getRetryDelay(retryCount);
             logger.warn(`❌ Buy attempt ${retryCount + 1} failed for ${assetName}. Retrying in ${retryDelay / 1000}s...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
-            return await executeBuyOrder(assetMint, amountUSDC, price, retryCount + 1);
+            return await executeBuyOrder(assetMint, amountUSDC, price, triggerReason, retryCount + 1);
         } else {
             // All retries exhausted - try Helius fallback with retries
             const heliusRpcUrl = process.env.HELIUS_RPC_URL;
@@ -314,7 +314,7 @@ export async function executeBuyOrder(assetMint: string, amountUSDC: number, pri
                         action: 'BUY',
                         price: price,
                         amount: amountUSDC,
-                        reason: 'Strategy signal confirmed (via Helius fallback).',
+                        reason: (triggerReason || 'Strategy signal confirmed') + ' (via Helius fallback)',
                         indicators: {}
                     });
 

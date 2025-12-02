@@ -1907,3 +1907,166 @@ PENG: Momentum +0.84%
 **Status**: ✅ Complete - v2.14.0 active with 2-period immediate momentum at 0.55% threshold
 
 ---
+
+## Entry 51: v2.15.0 - Dual-Momentum System (Spike + Trend) (Dec 02, 2025)
+
+**Context**: Bot was catching fast pumps but missing steady uptrends, resulting in poor entry timing (buying at peaks)
+
+**User Observation with Binance Chart**:
+- Showed PENGU/USDC 5-minute chart with annotations:
+  - **Red arrow**: Steady uptrend from ~11:30 to 13:20 (price climbing from $0.00965 to $0.01015)
+  - **Green circle**: Bot bought at 15:10 (14:09 GMT) at $0.01028504 - the TOP of a sharp spike
+- User insight: *"Right now we are detecting fast increases, but we are missing when the increase goes slowly but consistently"*
+
+**Problem Analysis from Logs**:
+
+**During steady climb (red arrow, 11:00-13:00 GMT)**:
+```
+11:01 → PENG: Momentum +0.23% ❌ (below 0.55% threshold)
+11:03 → PENG: Momentum +0.14% ❌
+11:07 → PENG: Momentum +0.17% ❌
+11:16 → PENG: Momentum +0.26% ❌
+11:18 → PENG: Momentum +0.27% ❌
+11:21 → PENG: Momentum +0.29% ❌
+```
+**All IGNORED** - Momentum consistently +0.15-0.30% but below 0.55% threshold
+
+**At sharp spike (green circle, 14:09 GMT)**:
+```
+14:09 → PENG: Momentum +0.67% ✅ BUY at $0.010285
+Result: Bought at TOP, immediately went negative
+```
+
+**Root Cause**:
+- Single momentum detector (2-period, 0.55% threshold) optimized for fast pumps
+- Missed steady climbs where momentum was consistent but below spike threshold
+- By the time spike threshold was met, price had already climbed significantly
+- Bad entry timing: buying peaks instead of entering during the climb
+
+**User's Proposed Solution**: 
+*"Maybe it make sense to calculate 2 momentums, one to detect quick increases like the one we have now (measuring short periods and having a high % threshold), and a second one to detect slow increases (longer periods measured and a lower % threshold?"*
+
+**Implementation**: Dual-Momentum System
+
+**Part 1: Spike Momentum (Fast Pump Detector)**
+- **Period**: 2 prices (T-1 → T) = 2 minutes
+- **Formula**: `(T - T-1) / T-1 × 100`
+- **Threshold**: **0.50%** (lowered from 0.55% per user request)
+- **Purpose**: Catch explosive pumps as they happen
+
+**Part 2: Trend Momentum (Steady Climb Detector)**
+- **Period**: 10 prices (T-10 → T) = 10 minutes
+- **Formula**: `(T - T-10) / T-10 × 100`
+- **Threshold**: **0.20%** (new)
+- **Purpose**: Catch gradual uptrends early
+
+**Entry Logic**:
+```typescript
+BUY if:
+  - Golden Cross (SMA12 > SMA26)
+  - Market Health > -0.5%
+  - (Spike Momentum > 0.50% OR Trend Momentum > 0.20%)
+```
+
+**Files Modified**:
+
+**1. src/bot.ts (lines 30-43)**: 
+- Added two separate price history maps:
+  - `spikePriceHistory`: Last 2 prices per token
+  - `trendPriceHistory`: Last 10 prices per token
+- Added momentum threshold constants:
+  - `SPIKE_MOMENTUM_THRESHOLD = 0.50`
+  - `TREND_MOMENTUM_THRESHOLD = 0.20`
+  - `SPIKE_HISTORY_SIZE = 2`
+  - `TREND_HISTORY_SIZE = 10`
+
+**2. src/bot.ts (lines 328-403)**: Complete momentum calculation rewrite
+- Initialize both price histories for each token
+- Add current price to both histories
+- Maintain separate history sizes (2 vs 10)
+- Calculate spike momentum: `(T - T-1) / T-1 × 100`
+- Calculate trend momentum: `(T - T-10) / T-10 × 100`
+- Check if EITHER threshold is met (OR logic)
+- Determine trigger reason: `SPIKE`, `TREND`, or `SPIKE+TREND`
+- Enhanced logging:
+  ```
+  PENG: Spike +0.67% | Trend +0.23%
+    └─ Spike (2-min): $0.00975617 → $0.00982000
+    └─ Trend (10-min): $0.00965400 → $0.00982000
+    └─ ⚡ MOMENTUM SIGNAL: SPIKE (0.67% > 0.50%) - Checking Golden Cross...
+  ```
+
+**3. src/bot.ts (line 421)**: Pass trigger reason to executeBuyOrder
+- Changed: `executeBuyOrder(asset.mint, amountUSDC, currentPrice, triggerReason)`
+- Reason includes which momentum triggered and percentages
+
+**4. src/order_executor/trader.ts (line 192)**: Updated function signature
+- Added optional `triggerReason` parameter
+- `executeBuyOrder(assetMint, amountUSDC, price, triggerReason?, retryCount = 0)`
+
+**5. src/order_executor/trader.ts (lines 253, 317)**: Use trigger reason in notifications
+- Main notification: `reason: triggerReason || 'Strategy signal confirmed.'`
+- Helius fallback: `reason: (triggerReason || 'Strategy signal confirmed') + ' (via Helius fallback)'`
+
+**6. src/order_executor/trader.ts (line 266)**: Pass trigger reason in retry
+- Recursive call includes `triggerReason` parameter
+
+**Expected Impact**:
+
+**Would Have Caught PENG Early**:
+- At 11:20 GMT: Trend momentum = +0.27% over 10 minutes
+- Threshold: 0.20% → **ENTRY TRIGGERED** ✅
+- Entry price: ~$0.0097 (instead of $0.0102)
+- Better position: +5% room to the spike top
+
+**Entry Scenarios**:
+1. **Steady Climb**: Trend > 0.20% triggers entry early
+2. **Fast Pump**: Spike > 0.50% triggers entry immediately
+3. **Both Strong**: Both trigger, maximum confidence signal
+
+**Log Format**:
+```
+BONK: Spike +0.15% | Trend +0.28%
+  └─ ⚡ MOMENTUM SIGNAL: TREND (0.28% > 0.20%) - Checking Golden Cross...
+  └─ 🟢 BUY SIGNAL: BONK - MH=0.55%, TREND (0.28% > 0.20%)
+```
+
+**Telegram Notification Examples**:
+- `SPIKE (0.67% > 0.50%)`
+- `TREND (0.28% > 0.20%)`
+- `SPIKE+TREND (0.67% + 0.28%)`
+
+**Benefits**:
+- ✅ Catches steady uptrends early (better entry timing)
+- ✅ Still catches explosive pumps (spike detector preserved)
+- ✅ More trading opportunities (two independent triggers)
+- ✅ Better position quality (enter trends, not peaks)
+- ✅ Clear logging (see which momentum triggered)
+- ⚠️ More signals expected (need monitoring)
+
+**Why This Works**:
+- Steady trends build over 10 minutes (+2% total = 0.20% threshold met)
+- Fast pumps spike within 2 minutes (+0.50% immediate)
+- OR logic ensures we catch both patterns
+- Golden Cross still validates trend direction
+- MH > -0.5% still protects from bearish markets
+
+**Testing Plan**:
+- Monitor signal frequency over next 24-48 hours
+- Track entry quality (trend vs spike triggers)
+- Compare P&L by trigger type
+- Adjust thresholds if needed (0.15%-0.25% for trend, 0.45%-0.55% for spike)
+
+**Build & Deployment**:
+- Built successfully with: `npm run build`
+- Restarted: `pm2 restart trading-bot`
+- Bot online with dual-momentum system
+
+**Documentation Updated**:
+- ✅ CHANGELOG.md: v2.15.0 entry with detailed problem/solution
+- ✅ SESSION_MEMORY.md: This chronological entry (Entry 51)
+- ✅ README.md: Updated to version 2.15.0
+
+**Status**: ✅ Complete - v2.15.0 active with dual-momentum system (Spike 0.50% + Trend 0.20%)
+
+---

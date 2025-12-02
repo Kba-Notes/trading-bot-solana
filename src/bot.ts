@@ -28,12 +28,19 @@ const MOMENTUM_WEIGHT = 2.0; // Weight for momentum adjustment (2.0 = full impac
 const mhHistory: Array<{ timestamp: Date; mh: number }> = [];
 
 // v2.12.2: Real-time price history for momentum calculation (Jupiter live prices)
-// v2.14.0: Store last 2 prices per token for immediate momentum tracking (T-1 → T)
+// v2.15.0: Dual-momentum system - track both short-term (spike) and long-term (trend)
 interface PriceSnapshot {
     price: number;
     timestamp: Date;
 }
-const priceHistory: Map<string, PriceSnapshot[]> = new Map();
+const spikePriceHistory: Map<string, PriceSnapshot[]> = new Map(); // Last 2 prices for spike detection
+const trendPriceHistory: Map<string, PriceSnapshot[]> = new Map(); // Last 10 prices for trend detection
+
+// v2.15.0: Momentum thresholds
+const SPIKE_MOMENTUM_THRESHOLD = 0.50; // 0.50% for immediate pumps (2-period)
+const TREND_MOMENTUM_THRESHOLD = 0.20; // 0.20% for steady climbs (10-period)
+const SPIKE_HISTORY_SIZE = 2;  // Track last 2 prices for spike detection
+const TREND_HISTORY_SIZE = 10; // Track last 10 prices for trend detection
 
 const strategy = new GoldenCrossStrategy({
     shortSMAPeriod: strategyConfig.shortSMAPeriod,
@@ -318,48 +325,82 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                 continue;
             }
 
-            // Get or initialize price history for this asset
-            if (!priceHistory.has(asset.mint)) {
-                priceHistory.set(asset.mint, []);
+            // v2.15.0: Initialize both price histories if needed
+            if (!spikePriceHistory.has(asset.mint)) {
+                spikePriceHistory.set(asset.mint, []);
             }
-            const history = priceHistory.get(asset.mint)!;
-
-            // Add current price to history
-            history.push({ price: currentPrice, timestamp: new Date() });
-
-            // v2.14.0: Keep only last 2 prices (simplified from 3)
-            if (history.length > 2) {
-                history.shift();
+            if (!trendPriceHistory.has(asset.mint)) {
+                trendPriceHistory.set(asset.mint, []);
             }
 
-            // v2.14.0: Need only 2 prices for immediate momentum (T-1 → T)
-            if (history.length < 2) {
-                logger.info(`  ${asset.name}: Building price history (${history.length}/2 prices)`);
+            const spikeHistory = spikePriceHistory.get(asset.mint)!;
+            const trendHistory = trendPriceHistory.get(asset.mint)!;
+
+            // Add current price to both histories
+            const priceSnapshot = { price: currentPrice, timestamp: new Date() };
+            spikeHistory.push(priceSnapshot);
+            trendHistory.push(priceSnapshot);
+
+            // Maintain history sizes
+            if (spikeHistory.length > SPIKE_HISTORY_SIZE) {
+                spikeHistory.shift();
+            }
+            if (trendHistory.length > TREND_HISTORY_SIZE) {
+                trendHistory.shift();
+            }
+
+            // v2.15.0: Calculate both momentums
+            let spikeMomentum = 0;
+            let trendMomentum = 0;
+            let hasSpikeMomentum = false;
+            let hasTrendMomentum = false;
+
+            // Calculate spike momentum (2-period: T-1 → T)
+            if (spikeHistory.length >= SPIKE_HISTORY_SIZE) {
+                const priceT1 = spikeHistory[0].price;
+                const priceT = spikeHistory[1].price;
+                spikeMomentum = ((priceT - priceT1) / priceT1) * 100;
+                hasSpikeMomentum = true;
+            }
+
+            // Calculate trend momentum (10-period: T-10 → T)
+            if (trendHistory.length >= TREND_HISTORY_SIZE) {
+                const priceT10 = trendHistory[0].price;
+                const priceT = trendHistory[trendHistory.length - 1].price;
+                trendMomentum = ((priceT - priceT10) / priceT10) * 100;
+                hasTrendMomentum = true;
+            }
+
+            // Log momentum status
+            if (!hasSpikeMomentum || !hasTrendMomentum) {
+                logger.info(`  ${asset.name}: Building price history (Spike: ${spikeHistory.length}/${SPIKE_HISTORY_SIZE}, Trend: ${trendHistory.length}/${TREND_HISTORY_SIZE})`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // v2.14.0: Calculate immediate momentum (T-1 → T only, no averaging)
-            // This catches pumps as they happen, not diluted by older data
-            const priceT1 = history[0].price;  // 1 period ago
-            const priceT = history[1].price;   // Current
+            // v2.15.0: Log both momentums
+            logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend ${trendMomentum > 0 ? '+' : ''}${trendMomentum.toFixed(2)}%`);
+            logger.info(`    └─ Spike (2-min): $${spikeHistory[0].price.toFixed(8)} → $${spikeHistory[1].price.toFixed(8)}`);
+            logger.info(`    └─ Trend (10-min): $${trendHistory[0].price.toFixed(8)} → $${trendHistory[trendHistory.length - 1].price.toFixed(8)}`);
 
-            // Momentum = immediate variation from T-1 to T
-            const tokenMomentum = ((priceT - priceT1) / priceT1) * 100;
+            // v2.15.0: Check if EITHER momentum threshold is met
+            const spikeTriggered = spikeMomentum > SPIKE_MOMENTUM_THRESHOLD;
+            const trendTriggered = trendMomentum > TREND_MOMENTUM_THRESHOLD;
 
-            // Log with immediate momentum
-            logger.info(`  ${asset.name}: Momentum ${tokenMomentum > 0 ? '+' : ''}${tokenMomentum.toFixed(2)}%`);
-            logger.info(`    └─ Prices: T-1=$${priceT1.toFixed(8)} → T=$${priceT.toFixed(8)}`);
-
-            // v2.14.0: Check momentum threshold (lowered from 0.65% to 0.55% for faster entries)
-            if (tokenMomentum <= 0.55) {
-                logger.info(`    └─ Below 0.55% threshold - HOLD`);
+            if (!spikeTriggered && !trendTriggered) {
+                logger.info(`    └─ No momentum signal - HOLD (Spike: ${spikeMomentum.toFixed(2)}% ≤ ${SPIKE_MOMENTUM_THRESHOLD}%, Trend: ${trendMomentum.toFixed(2)}% ≤ ${TREND_MOMENTUM_THRESHOLD}%)`);
                 await sleep(API_DELAYS.RATE_LIMIT);
                 continue;
             }
 
-            // Token has momentum > 0.55%, check Golden Cross
-            logger.info(`    └─ Above 0.55% threshold - Checking Golden Cross...`);
+            // Determine which momentum triggered
+            const triggerReason = spikeTriggered && trendTriggered
+                ? `SPIKE+TREND (${spikeMomentum.toFixed(2)}% + ${trendMomentum.toFixed(2)}%)`
+                : spikeTriggered
+                    ? `SPIKE (${spikeMomentum.toFixed(2)}% > ${SPIKE_MOMENTUM_THRESHOLD}%)`
+                    : `TREND (${trendMomentum.toFixed(2)}% > ${TREND_MOMENTUM_THRESHOLD}%)`;
+
+            logger.info(`    └─ ⚡ MOMENTUM SIGNAL: ${triggerReason} - Checking Golden Cross...`);
 
             // Fetch 5-min historical data for Golden Cross check
             const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
@@ -375,9 +416,9 @@ async function checkTokenMomentumForBuy(): Promise<number> {
             if (decision.action === 'BUY') {
                 buySignals++;
                 logger.info(`    └─ ✅ GOLDEN CROSS CONFIRMED - ${decision.reason}`);
-                logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, Momentum=${tokenMomentum.toFixed(2)}%`);
+                logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, ${triggerReason}`);
 
-                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice);
+                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice, triggerReason);
                 if (!buySuccess) {
                     logger.error(`    └─ ❌ Failed to execute buy order after all retries`);
                 }

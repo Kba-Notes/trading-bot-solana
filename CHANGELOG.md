@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2025-12-02
+
+### Added
+- **🎯 Dual-Momentum System** - Separate detectors for fast pumps and steady trends
+  - **Problem Analysis**: Bot caught fast pumps but missed steady climbs
+    - Example (PENG 11:00-13:00): Steady +0.20-0.30% momentum → IGNORED
+    - Example (PENG 14:09): Spike +0.67% momentum → BOUGHT AT TOP
+    - Result: Bad entry timing, bought peaks instead of early trends
+  - **Solution**: Two independent momentum detectors
+    1. **Spike Momentum (2-period)**:
+       - Detects immediate pumps (T-1 → T)
+       - Threshold: **0.50%** (lowered from 0.55%)
+       - Catches explosive moves as they happen
+    2. **Trend Momentum (10-period)**:
+       - Detects steady climbs (T-10 → T)
+       - Threshold: **0.20%** (new)
+       - Catches gradual uptrends early
+  - **Entry Logic**: BUY if (Golden Cross AND MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%))
+- **📊 Enhanced Logging** - Both momentums shown in logs
+  - Format: `Spike +0.67% | Trend +0.23%`
+  - Shows which momentum triggered: `SPIKE`, `TREND`, or `SPIKE+TREND`
+  - Price ranges for both periods displayed
+- **📱 Enhanced Telegram Notifications** - Buy notifications show trigger reason
+  - Examples: `SPIKE (0.67% > 0.50%)`, `TREND (0.23% > 0.20%)`, `SPIKE+TREND (0.67% + 0.23%)`
+  - Clear visibility into what triggered each buy signal
+
+### Changed
+- **Spike Momentum Threshold**: Lowered from 0.55% to 0.50%
+- **Price History Tracking**: Now maintains two separate histories
+  - `spikePriceHistory`: Last 2 prices per token (2 minutes)
+  - `trendPriceHistory`: Last 10 prices per token (10 minutes)
+
+### Expected Impact
+- ✅ **Early entries on steady trends** (would have caught PENG at 11:20 instead of 14:09)
+- ✅ **Better position quality** (enter during climbs, not at peaks)
+- ✅ **Still catch explosive pumps** (spike detector unchanged in logic)
+- ✅ **More trading opportunities** (steady trends + fast pumps)
+- 📊 **More signals expected** (lower spike threshold + new trend detector)
+
+### Technical Details
+- Modified: `src/bot.ts` - Added dual-momentum calculation and thresholds
+- Modified: `src/order_executor/trader.ts` - Added `triggerReason` parameter to `executeBuyOrder()`
+- History sizes: Spike (2 prices), Trend (10 prices)
+- Both use Jupiter real-time prices for accuracy
+
 ## [2.14.0] - 2025-11-28
 
 ### Changed

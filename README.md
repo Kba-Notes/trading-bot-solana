@@ -210,17 +210,25 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.14.0
+**Current Version:** 2.15.0
 
-### Latest Updates (v2.14.0 - Nov 28, 2025)
+### Latest Updates (v2.15.0 - Dec 02, 2025)
+- **🎯 Dual-Momentum System** - Two independent detectors for optimal entry timing
+  - Problem: Bot caught fast pumps but missed steady climbs (bought peaks instead of trends)
+  - Solution: Two momentum detectors working in parallel
+    - **Spike Momentum (2-min)**: Catches explosive pumps > 0.50%
+    - **Trend Momentum (10-min)**: Catches steady climbs > 0.20%
+  - Entry: BUY if Golden Cross + MH > -0.5% + (Spike > 0.50% OR Trend > 0.20%)
+  - Result: Enter early during steady uptrends, still catch fast pumps
+- **📊 Enhanced Logging & Notifications** - See which momentum triggered each buy
+  - Log format: `Spike +0.67% | Trend +0.23%`
+  - Telegram shows: `SPIKE`, `TREND`, or `SPIKE+TREND` with percentages
+
+### Previous Updates (v2.14.0 - Nov 28, 2025)
 - **⚡ Immediate Momentum (2-Period)** - Simplified from 3-period averaging to 2-period immediate momentum
   - Problem: Still missing pumps despite -0.5% MH threshold
   - Root cause: 3-period averaging diluted immediate signals (Var2: +0.84% averaged to +0.46%)
   - Solution: Track only last 2 prices (T-1 → T) for immediate momentum detection
-  - Formula: `(T - T-1) / T-1 × 100` (no averaging)
-  - Catches pumps as they start, not after they average out
-- **📉 Lowered Momentum Threshold** - Reduced from 0.65% to 0.55%
-  - Combined with 2-period momentum for maximum responsiveness
   - Expected: Catch more early-stage pumps with faster entry timing
 
 ### Previous Updates (v2.13.0 - Nov 28, 2025)
