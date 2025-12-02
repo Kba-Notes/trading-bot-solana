@@ -363,11 +363,17 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                 hasSpikeMomentum = true;
             }
 
-            // Calculate trend momentum (10-period: T-10 → T)
+            // Calculate trend momentum (10-period: average of consecutive variations)
+            // This filters out "flat + spike" scenarios by measuring average rate of change
             if (trendHistory.length >= TREND_HISTORY_SIZE) {
-                const priceT10 = trendHistory[0].price;
-                const priceT = trendHistory[trendHistory.length - 1].price;
-                trendMomentum = ((priceT - priceT10) / priceT10) * 100;
+                let totalVariation = 0;
+                for (let i = 1; i < trendHistory.length; i++) {
+                    const pricePrev = trendHistory[i - 1].price;
+                    const priceCurr = trendHistory[i].price;
+                    const variation = ((priceCurr - pricePrev) / pricePrev) * 100;
+                    totalVariation += variation;
+                }
+                trendMomentum = totalVariation / (trendHistory.length - 1);
                 hasTrendMomentum = true;
             }
 
@@ -379,9 +385,9 @@ async function checkTokenMomentumForBuy(): Promise<number> {
             }
 
             // v2.15.0: Log both momentums
-            logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend ${trendMomentum > 0 ? '+' : ''}${trendMomentum.toFixed(2)}%`);
+            logger.info(`  ${asset.name}: Spike ${spikeMomentum > 0 ? '+' : ''}${spikeMomentum.toFixed(2)}% | Trend ${trendMomentum > 0 ? '+' : ''}${trendMomentum.toFixed(2)}% (avg)`);
             logger.info(`    └─ Spike (2-min): $${spikeHistory[0].price.toFixed(8)} → $${spikeHistory[1].price.toFixed(8)}`);
-            logger.info(`    └─ Trend (10-min): $${trendHistory[0].price.toFixed(8)} → $${trendHistory[trendHistory.length - 1].price.toFixed(8)}`);
+            logger.info(`    └─ Trend (10-min avg): $${trendHistory[0].price.toFixed(8)} → $${trendHistory[trendHistory.length - 1].price.toFixed(8)}`);
 
             // v2.15.0: Check if EITHER momentum threshold is met
             const spikeTriggered = spikeMomentum > SPIKE_MOMENTUM_THRESHOLD;

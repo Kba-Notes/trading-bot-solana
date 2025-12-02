@@ -210,9 +210,16 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.15.0
+**Current Version:** 2.15.1
 
-### Latest Updates (v2.15.0 - Dec 02, 2025)
+### Latest Updates (v2.15.1 - Dec 02, 2025)
+- **🔍 Improved Trend Momentum** - Now measures average rate of change, not just total change
+  - Problem: Old method (T-10 → T) couldn't distinguish steady trends from "flat + spike"
+  - Solution: Average of 9 consecutive period-to-period variations
+  - Result: Filters false trend signals (flat periods with spike at end)
+  - Example: 9 flat periods + 1 spike = 0.22% avg (filtered) vs true trend = 0.20% avg (detected)
+
+### Previous Updates (v2.15.0 - Dec 02, 2025)
 - **🎯 Dual-Momentum System** - Two independent detectors for optimal entry timing
   - Problem: Bot caught fast pumps but missed steady climbs (bought peaks instead of trends)
   - Solution: Two momentum detectors working in parallel

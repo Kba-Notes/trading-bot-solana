@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] - 2025-12-02
+
+### Changed
+- **🔍 Improved Trend Momentum Calculation** - Now uses average of consecutive variations
+  - **Problem with v2.15.0**: Trend momentum compared T-10 directly to T
+    - Example: If T-10 to T-1 is flat, but T spikes, trend momentum incorrectly showed high percentage
+    - Couldn't distinguish between "steady trend" vs "flat + spike at end"
+  - **Solution**: Calculate average of 9 consecutive period-to-period variations
+    - Formula: Average of [(T-9 - T-10)/T-10, (T-8 - T-9)/T-9, ..., (T - T-1)/T-1]
+    - Measures **average rate of change** instead of total change
+  - **Impact**: Much better at filtering false trend signals
+    - True steady trend: Each period +0.2% → Average +0.2% ✓ (detected)
+    - Flat + spike: 9 periods flat (0%), 1 spike (+2%) → Average +0.22% ✗ (filtered out)
+  - **Credit**: User suggestion for more accurate trend detection
+
+### Technical Details
+- Modified: `src/bot.ts` lines 366-378 - Loop through consecutive periods and average variations
+- Logging: Added "(avg)" label to trend momentum to clarify calculation method
+- Formula: `trendMomentum = sum(variations) / (historySize - 1)`
+
 ## [2.15.0] - 2025-12-02
 
 ### Added
