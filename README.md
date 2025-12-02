@@ -210,9 +210,16 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.16.0
+**Current Version:** 2.17.0
 
-### Latest Updates (v2.16.0 - Dec 02, 2025)
+### Latest Updates (v2.17.0 - Dec 02, 2025)
+- **⚡ Removed Golden Cross Requirement** - Momentum signals now trigger immediate buys
+  - Problem: Golden cross (SMA12 > SMA26) is a lagging indicator - waits for historical averages to align
+  - Example: WIF showed Spike +1.22% and Trend +0.36%, but bot waited for slow SMA crossover
+  - Solution: Entry now `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+  - Result: Faster entries, better prices, catch pumps earlier (no SMA lag)
+
+### Previous Updates (v2.16.0 - Dec 02, 2025)
 - **🎮 Manual Trading Commands** - Full control via Telegram
   - `/buy <TOKEN>` - Manually buy any monitored token
   - `/sell <TOKEN>` - Manually sell open positions (existing)
@@ -239,7 +246,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
   - Solution: Two momentum detectors working in parallel
     - **Spike Momentum (2-min)**: Catches explosive pumps > 0.50%
     - **Trend Momentum (10-min)**: Catches steady climbs > 0.20%
-  - Entry: BUY if Golden Cross + MH > -0.5% + (Spike > 0.50% OR Trend > 0.20%)
+  - Entry: BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%) [Golden Cross removed in v2.17.0]
   - Result: Enter early during steady uptrends, still catch fast pumps
 - **📊 Enhanced Logging & Notifications** - See which momentum triggered each buy
   - Log format: `Spike +0.67% | Trend +0.23%`

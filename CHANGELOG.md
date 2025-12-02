@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2025-12-02
+
+### Changed
+- **⚡ Removed Golden Cross Requirement** - Momentum signals now trigger immediate buys
+  - **Problem**: Golden Cross (SMA12 > SMA26) is a lagging indicator based on historical averages
+    - Example from logs: WIF showed Spike +1.22% and Trend +0.36% at 16:59:25
+    - Bot detected strong momentum but waited for golden cross confirmation
+    - By the time SMAs crossed, price had already moved significantly (entered late)
+  - **Root Cause**: Momentum detectors are leading indicators (show price moving NOW)
+    - But golden cross lags behind because it averages past 12-26 minutes of data
+    - This caused late entries and buying near peaks instead of early in trends
+  - **Solution**: Remove golden cross check entirely - trust momentum + market health
+    - Entry logic now: `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+    - Removed: Historical data fetch, SMA calculations, golden cross confirmation
+  - **Why This Works**: Dual-momentum system already provides strong filtering
+    - Spike (0.50% threshold) catches explosive pumps
+    - Trend (0.20% averaged) filters false signals (steady trends only)
+    - Market Health (-0.5% threshold) prevents buying during dumps
+    - Three independent confirmations = sufficient without lagging SMAs
+  - **Expected Impact**: Earlier entries during uptrends, better entry prices
+    - Example: WIF pump would have bought at 16:59 instead of waiting for SMA crossover
+    - Catch steady climbs when trend detector fires (not 5-15 minutes later)
+
+### Technical Details
+- Modified: `src/bot.ts` lines 442-450 - Removed golden cross check, direct buy execution
+- Removed imports: `getJupiterHistoricalData` and `runStrategy` (no longer needed)
+- New log format: `⚡ MOMENTUM SIGNAL: [SPIKE/TREND/SPIKE+TREND]` → Direct buy
+- Strategy simplification: From 3 layers (Momentum + MH + Golden Cross) to 2 layers (Momentum + MH)
+
+### Benefits
+- ✅ Faster entry timing (no SMA lag)
+- ✅ Better entry prices (catch pumps earlier)
+- ✅ Simpler logic (fewer moving parts)
+- ✅ Still filtered (dual-momentum + market health)
+- ✅ Reduced API calls (no historical data fetch)
+
 ## [2.16.0] - 2025-12-02
 
 ### Added

@@ -2,8 +2,7 @@
 
 import { logger } from './services.js';
 import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, POSITION_CHECK_INTERVAL, USDC_MINT, marketFilterConfig } from './config.js';
-import { getHistoricalData as getJupiterHistoricalData, getCurrentPrice } from './data_extractor/jupiter.js';
-import { runStrategy } from './strategy_analyzer/logic.js';
+import { getCurrentPrice } from './data_extractor/jupiter.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
 import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
 import { initializeCommandHandlers } from './notifier/commandHandler.js';
@@ -439,30 +438,14 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                     ? `SPIKE (${spikeMomentum.toFixed(2)}% > ${SPIKE_MOMENTUM_THRESHOLD}%)`
                     : `TREND (${trendMomentum.toFixed(2)}% > ${TREND_MOMENTUM_THRESHOLD}%)`;
 
-            logger.info(`    └─ ⚡ MOMENTUM SIGNAL: ${triggerReason} - Checking Golden Cross...`);
+            // v2.17.0: Direct buy on momentum signal (no golden cross delay)
+            buySignals++;
+            logger.info(`    └─ ⚡ MOMENTUM SIGNAL: ${triggerReason}`);
+            logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, ${triggerReason}`);
 
-            // Fetch 5-min historical data for Golden Cross check
-            const historicalPrices = await getJupiterHistoricalData(asset.geckoPool, strategyConfig.timeframe, strategyConfig.historicalDataLimit);
-            if (historicalPrices.length < BOT_CONSTANTS.MIN_HISTORICAL_DATA_POINTS) {
-                logger.warn(`    └─ Insufficient 5-min historical data for Golden Cross check`);
-                await sleep(API_DELAYS.RATE_LIMIT);
-                continue;
-            }
-
-            // Run strategy to check Golden Cross
-            const { decision, indicators } = runStrategy(asset.mint, historicalPrices, latestMarketHealth, strategyConfig.requireRsiConfirmation);
-
-            if (decision.action === 'BUY') {
-                buySignals++;
-                logger.info(`    └─ ✅ GOLDEN CROSS CONFIRMED - ${decision.reason}`);
-                logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, ${triggerReason}`);
-
-                const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice, triggerReason);
-                if (!buySuccess) {
-                    logger.error(`    └─ ❌ Failed to execute buy order after all retries`);
-                }
-            } else {
-                logger.info(`    └─ ❌ Golden Cross NOT confirmed - ${decision.reason} - HOLD`);
+            const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice, triggerReason);
+            if (!buySuccess) {
+                logger.error(`    └─ ❌ Failed to execute buy order after all retries`);
             }
 
             await sleep(API_DELAYS.RATE_LIMIT);

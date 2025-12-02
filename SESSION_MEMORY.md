@@ -2623,3 +2623,96 @@ Use /stop to pause trading.
 **Status**: ✅ Complete - v2.16.0 active with `/buy`, `/stop`, and `/start` commands
 
 ---
+
+## Entry 55: v2.17.0 - Removed Golden Cross Requirement (Dec 02, 2025)
+
+**User Request**: User showed WIF logs with strong momentum (Spike +1.22%, Trend +0.36%) but bot waiting for golden cross. Asked: "does it make sense to wait for the golden cross here?"
+
+**User Insight**: Pointed out that golden cross (SMA12 > SMA26) is a lagging indicator based on historical averages, while momentum detectors show price moving NOW. By the time SMAs cross, much of the pump is already over.
+
+**User Decision**: After I presented 3 options (remove entirely, make optional, use faster SMA), user chose Option 1 - remove golden cross entirely.
+
+**Problem Identified**:
+
+1. **Lagging Indicator Delay**: Golden cross waits for 12-26 minute averages to align
+   - Momentum fires at 16:59:25 (WIF Spike +1.22%, Trend +0.36%)
+   - Bot waits for SMA12 to cross above SMA26
+   - By the time golden cross confirms, price already moved significantly
+   - Result: Late entry, worse prices, buying near peaks
+
+2. **Momentum vs SMA Timing Mismatch**:
+   - Momentum detectors: Leading indicators (catch price moving NOW)
+   - Golden cross: Lagging indicator (confirms trend that already happened)
+   - This mismatch caused the pattern user originally identified: missing steady climbs, buying at peaks
+
+3. **Unnecessary Layer**: Dual-momentum system already provides strong filtering:
+   - Spike: 0.50% threshold (filters noise)
+   - Trend: 0.20% averaged consecutive variations (filters "flat + spike" false signals)
+   - Market Health: > -0.5% (prevents buying during dumps)
+   - Three independent confirmations = sufficient without golden cross
+
+**Solution Implemented** (v2.17.0):
+
+**Changed Entry Logic**:
+- Old: `BUY if Golden Cross AND MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+- New: `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+
+**Code Changes**:
+
+`src/bot.ts`:
+- Lines 442-450: Removed golden cross check and historical data fetch
+- Old flow: Momentum → Fetch historical → Calculate SMAs → Check golden cross → Buy
+- New flow: Momentum → Direct buy
+- Removed imports: `getJupiterHistoricalData` and `runStrategy` (no longer needed)
+- Updated log: `⚡ MOMENTUM SIGNAL: [SPIKE/TREND/SPIKE+TREND]` → Direct buy (no "Checking Golden Cross..." message)
+
+**Benefits**:
+
+1. **Faster Entry Timing**: No waiting for SMA lag
+   - Example: WIF pump would buy at 16:59 instead of waiting for crossover
+   - Catch steady trends when trend detector fires (not 5-15 minutes later)
+
+2. **Better Entry Prices**: Enter early during uptrends
+   - Buy during price discovery, not after confirmation
+   - Avoid buying peaks when SMAs finally align
+
+3. **Simpler Strategy**: From 3 layers to 2 layers
+   - Reduced complexity = fewer failure points
+   - Easier to debug and optimize
+
+4. **Still Filtered**: Multiple independent confirmations
+   - Spike threshold: 0.50% (catches explosive pumps only)
+   - Trend threshold: 0.20% averaged (catches steady trends, filters false signals)
+   - Market Health: > -0.5% (prevents buying during dumps)
+
+5. **Reduced API Calls**: No historical data fetch needed
+   - Faster execution
+   - Lower API usage
+
+**Expected Impact**:
+
+- Earlier entries during uptrends (catch pumps at start, not middle)
+- Better average entry prices
+- Higher win rate (enter trends early, ride full move)
+- Fewer missed opportunities (no SMA delay)
+
+**Testing Plan**:
+
+Monitor next pump with logs:
+- Check entry timing (should be immediate after momentum fires)
+- Compare entry price to peak price (should have more room to grow)
+- Track win rate over next 10-20 trades
+
+**Build & Deployment**:
+- Built successfully with: `npm run build` (no TypeScript errors)
+- Restarted: `pm2 restart trading-bot`
+- Bot online and operational
+
+**Documentation Updated**:
+- ✅ CHANGELOG.md: v2.17.0 entry with problem/solution/benefits
+- ✅ README.md: Updated to version 2.17.0, updated v2.15.0 entry note
+- ✅ SESSION_MEMORY.md: This entry (Entry 55)
+
+**Status**: ✅ Complete - v2.17.0 active with momentum-only entry logic (no golden cross)
+
+---
