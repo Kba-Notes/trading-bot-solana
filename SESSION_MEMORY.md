@@ -235,7 +235,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-11-19 (Latest session - v2.10.0 with momentum-based Market Health)
+**Last Updated**: 2025-12-04 (Latest session - v2.17.1 documentation audit and correction)
 **Status**: ✅ Ready for continuous development
 
 **Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
@@ -246,7 +246,28 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ### ✅ Completed Features
 
-1. **Enhanced Telegram Notifications** (Commits: 9555963, b69ac51)
+**LATEST - December 4, 2025**
+
+1. **Documentation Audit & Correction** (v2.17.1 - Dec 4, 2025)
+   - **Full code audit performed** for trailing stop implementation
+   - **Issue found**: README.md incorrectly described "Dynamic Trailing Stop" (0% to 3.5% based on MH)
+   - **Reality**: Bot has used **fixed 2.5% trailing stop** since v2.12.0
+   - **Verified correct behaviors**:
+     - ✅ Trailing stop activates immediately on position entry
+     - ✅ Highest price updates EVERY time current price exceeds previous high
+     - ✅ Trailing stop = highestPrice × 0.975 (fixed 2.5%)
+     - ✅ Position persisted to disk when highest price updates
+     - ✅ Stop loss at -1% working correctly
+   - **Documentation updated**:
+     - README.md: Fixed "Risk Management" and "Exit Conditions" sections
+     - CHANGELOG.md: Added v2.17.1 entry documenting the correction
+     - SESSION_MEMORY.md: Added this audit session entry
+   - **No code changes needed**: Implementation already correct
+   - **Status**: ✅ Documentation now matches actual bot behavior
+
+**PREVIOUS SESSIONS**
+
+2. **Enhanced Telegram Notifications** (Commits: 9555963, b69ac51)
    - Detailed BUY/SELL notifications with all technical indicators
    - Analysis cycle summaries after each run
    - Position check notifications

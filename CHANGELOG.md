@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.1] - 2025-12-04
+
+### Fixed
+- **📝 Documentation Correction** - Updated README.md to accurately reflect current trailing stop behavior
+  - **Issue**: README incorrectly described "Dynamic Trailing Stop" (0% to 3.5% based on Market Health)
+  - **Reality**: Bot has used fixed 2.5% trailing stop since v2.12.0
+  - **Changes**:
+    - Updated "Risk Management" section: Removed dynamic MH-based thresholds
+    - Updated "Exit Conditions" section: Clarified fixed 2.5% trailing behavior
+    - Added clear examples showing trailing stop updates when price rises
+  - **Behavior confirmed correct**:
+    - ✅ Trailing stop activates immediately on position entry
+    - ✅ Highest price updates every time current price exceeds previous high
+    - ✅ Trailing stop = highestPrice × 0.975 (fixed 2.5% below highest)
+    - ✅ Position persisted to disk when highest price updates
+    - ✅ Stop loss at -1% working correctly
+  - **No code changes**: Implementation already correct at 2.5% fixed trailing
+  - **Impact**: Documentation now matches actual bot behavior
+
 ## [2.17.0] - 2025-12-02
 
 ### Changed

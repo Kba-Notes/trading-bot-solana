@@ -13,14 +13,12 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
 
 ### Risk Management
-- **Dynamic Exit Strategy:**
+- **Fixed Exit Strategy:**
   - Stop Loss: -1% from entry (consistent tight risk management)
-  - Dynamic Trailing Stop: Activates immediately on position entry, adapts to market conditions
-    - MH < 0: 0% trail (immediate sell in bearish markets)
-    - MH 0-0.3: 0.5% trail (very tight protection in weak bullish)
-    - MH 0.3-0.6: 1.0% trail (tight protection in moderate bullish)
-    - MH 0.6-0.9: 2.25% trail (moderate room in strong bullish)
-    - MH ≥ 0.9: 3.5% trail (maximum room in very strong bullish)
+  - Fixed Trailing Stop: 2.5% (predictable, consistent exits)
+    - Activates immediately on position entry
+    - Updates every time price reaches a new high
+    - Trails 2.5% below the highest price seen
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
   - Protection active from moment of entry (not waiting for profit)
 - **Smart Entry Filters:**
@@ -190,14 +188,14 @@ export const assetsToTrade = [
 
 ### Exit Conditions
 - **Stop Loss:** Price drops to -1% from entry (backup protection)
-- **Dynamic Trailing Stop:**
+- **Fixed Trailing Stop (2.5%):**
   - Activates immediately on position entry (not waiting for profit)
-  - Trailing percentage adapts to Market Health Index (0% to 3.5%)
-  - Sells when current price drops below (highestPrice × (1 - trailingPercent))
+  - Updates highest price every time current price exceeds previous high
+  - Sells when current price drops below (highestPrice × 0.975)
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
-  - Example (MH=1.0): Buy at $0.100, price hits $0.103 → Trailing at $0.09940 (3.5% below $0.103)
-  - Critical: MH < 0 = 0% trailing = immediate sell when market turns bearish
+  - Example: Buy at $0.100, price hits $0.103 → Trailing at $0.100425 (2.5% below $0.103)
+  - If price rises to $0.110 → New trailing at $0.10725 (2.5% below $0.110)
 - **No Take Profit:** Removed to let trailing stop manage all exits
 
 ### Expected Performance
