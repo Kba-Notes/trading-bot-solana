@@ -13,14 +13,15 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
 
 ### Risk Management
-- **Fixed Exit Strategy:**
-  - Stop Loss: -1% from entry (consistent tight risk management)
-  - Fixed Trailing Stop: 2.5% (predictable, consistent exits)
-    - Activates immediately on position entry
+- **Single Exit Mechanism:**
+  - Fixed Trailing Stop: 2.5% (sole exit mechanism, predictable and consistent)
+    - Activates immediately on position entry at -2.5% from entry price
     - Updates every time price reaches a new high
-    - Trails 2.5% below the highest price seen
+    - Always trails 2.5% below the highest price seen
+    - Maximum loss on entry: -2.5% (if price never rises)
+    - Protection active from moment of entry (not waiting for profit)
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
-  - Protection active from moment of entry (not waiting for profit)
+  - No Stop Loss: Trailing stop provides all downside protection
 - **Smart Entry Filters:**
   - Trend strength: Requires minimum 0.1% SMA slope
   - Volatility filter: Pauses trading when volatility > 5%
@@ -187,22 +188,26 @@ export const assetsToTrade = [
 5. **Low Volatility** - Average volatility < 5% (avoids choppy markets)
 
 ### Exit Conditions
-- **Stop Loss:** Price drops to -1% from entry (backup protection)
-- **Fixed Trailing Stop (2.5%):**
+- **Fixed Trailing Stop (2.5%) - Sole Exit Mechanism:**
   - Activates immediately on position entry (not waiting for profit)
+  - Initial trailing stop: Entry price × 0.975 (-2.5% from entry)
   - Updates highest price every time current price exceeds previous high
   - Sells when current price drops below (highestPrice × 0.975)
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
-  - Example: Buy at $0.100, price hits $0.103 → Trailing at $0.100425 (2.5% below $0.103)
-  - If price rises to $0.110 → New trailing at $0.10725 (2.5% below $0.110)
-- **No Take Profit:** Removed to let trailing stop manage all exits
+  - **Example flow:**
+    - Buy at $0.100 → Initial trailing at $0.0975 (-2.5%)
+    - Price rises to $0.103 → New trailing at $0.100425 (2.5% below $0.103)
+    - Price rises to $0.110 → New trailing at $0.10725 (2.5% below $0.110)
+    - Price drops to $0.107 → Sell triggered (below $0.10725)
+- **No Stop Loss:** Trailing stop provides all downside protection
+- **No Take Profit:** Trailing stop manages all exits
 
 ### Expected Performance
 - **Win Rate:** 50-60%
 - **Risk/Reward Ratio:** 3:1 to 6:1 (improved with 1-minute monitoring)
 - **Average Win:** +10% to +20% (better peak capture with 1-min checks)
-- **Average Loss:** -1%
+- **Maximum Loss:** -2.5% (trailing stop from entry)
 
 ## Version History
 

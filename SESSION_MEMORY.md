@@ -248,7 +248,37 @@ git status --ignored | grep .env  # Verify .env ignored
 
 **LATEST - December 4, 2025**
 
-1. **Documentation Audit & Correction** (v2.17.1 - Dec 4, 2025)
+1. **Removed Redundant Stop Loss Code** (v2.17.2 - Dec 4, 2025)
+   - **Critical discovery during audit**: Stop loss code was dead code
+     - Trailing stop activates immediately at -2.5% from entry
+     - Separate stop loss would trigger at -1% from entry
+     - **Problem**: Price cannot reach -1% without hitting -2.5% first
+     - Stop loss check came after trailing stop check (unreachable code)
+   - **Solution**: Removed all stop loss logic entirely
+     - Deleted ~20 lines of stop loss calculation and checks
+     - Trailing stop is now sole exit mechanism
+     - Simplified position monitoring loop
+     - Marked `stopLossPercentage` as deprecated in config
+   - **Code changes**:
+     - [src/bot.ts:231-276](src/bot.ts) - Removed stop loss, simplified trailing logic
+     - [src/config.ts:44](src/config.ts#L44) - Marked stopLossPercentage as deprecated
+   - **Documentation updated**:
+     - README.md: Rewrote "Risk Management" section (single exit mechanism)
+     - README.md: Rewrote "Exit Conditions" with clear example flow
+     - README.md: Changed "Average Loss: -1%" to "Maximum Loss: -2.5%"
+     - CHANGELOG.md: Added v2.17.2 entry with full explanation
+   - **New behavior**:
+     - Buy at $100 → Trailing stop immediately at $97.50 (-2.5%)
+     - Maximum loss: -2.5% (if price never rises above entry)
+     - Single, predictable exit mechanism
+   - **Benefits**:
+     - ✅ Simpler logic (one exit path instead of two)
+     - ✅ Clearer risk profile (always -2.5% max loss)
+     - ✅ No confusion about which mechanism triggers
+     - ✅ Cleaner, more maintainable code
+   - **Status**: ✅ Committed to GitHub
+
+2. **Documentation Audit & Correction** (v2.17.1 - Dec 4, 2025)
    - **Full code audit performed** for trailing stop implementation
    - **Issue found**: README.md incorrectly described "Dynamic Trailing Stop" (0% to 3.5% based on MH)
    - **Reality**: Bot has used **fixed 2.5% trailing stop** since v2.12.0
@@ -257,12 +287,12 @@ git status --ignored | grep .env  # Verify .env ignored
      - ✅ Highest price updates EVERY time current price exceeds previous high
      - ✅ Trailing stop = highestPrice × 0.975 (fixed 2.5%)
      - ✅ Position persisted to disk when highest price updates
-     - ✅ Stop loss at -1% working correctly
+     - ❌ Stop loss at -1% was dead code (discovered in v2.17.2)
    - **Documentation updated**:
      - README.md: Fixed "Risk Management" and "Exit Conditions" sections
      - CHANGELOG.md: Added v2.17.1 entry documenting the correction
      - SESSION_MEMORY.md: Added this audit session entry
-   - **No code changes needed**: Implementation already correct
+   - **No code changes in v2.17.1**: Implementation already correct
    - **Status**: ✅ Documentation now matches actual bot behavior
 
 **PREVIOUS SESSIONS**

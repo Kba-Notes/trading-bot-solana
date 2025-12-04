@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.2] - 2025-12-04
+
+### Removed
+- **🗑️ Removed Redundant Stop Loss Code** - Trailing stop is now the sole exit mechanism
+  - **Problem Identified**: Code had two competing exit mechanisms
+    - Trailing stop at -2.5% (activated immediately on entry)
+    - Separate stop loss at -1% (checked after trailing stop)
+    - **Critical issue**: -1% stop loss could never trigger because -2.5% trailing stop is wider
+    - Price cannot reach -1% without hitting -2.5% first
+    - The -1% stop loss was effectively dead code
+  - **Solution**: Removed all stop loss logic entirely
+    - Deleted stop loss calculation and checks from position monitoring ([src/bot.ts:234,282-303](src/bot.ts))
+    - Trailing stop now sole exit mechanism (simpler, cleaner logic)
+    - Marked `stopLossPercentage` as deprecated in config ([src/config.ts:44](src/config.ts#L44))
+  - **New Behavior**:
+    - Buy at $100 → Trailing stop immediately at $97.50 (-2.5%)
+    - If price never rises → Maximum loss is -2.5%
+    - As price rises, trailing stop follows 2.5% below new highs
+    - Single, predictable exit mechanism
+  - **Benefits**:
+    - ✅ Simpler logic (one exit path instead of two)
+    - ✅ Clearer risk: Maximum loss always -2.5%
+    - ✅ No confusion about which mechanism triggers
+    - ✅ Removed 20+ lines of unnecessary code
+
+### Changed
+- **📝 Updated Documentation** - Clarified that trailing stop is sole exit mechanism
+  - README.md: Updated "Risk Management" section
+  - README.md: Rewrote "Exit Conditions" with clear example flow
+  - README.md: Changed "Average Loss: -1%" to "Maximum Loss: -2.5%"
+  - All documentation now accurately reflects single exit mechanism
+
+### Technical Details
+- Modified `src/bot.ts:231-276` - Removed stop loss logic, simplified trailing stop monitoring
+- Modified `src/config.ts:44` - Marked `stopLossPercentage` as deprecated
+- No changes to trailing stop behavior (still 2.5% fixed)
+- Backwards compatible: Existing positions continue to work
+
 ## [2.17.1] - 2025-12-04
 
 ### Fixed

@@ -231,8 +231,6 @@ async function checkOpenPositions() {
         // Log position status with P&L
         logger.info(`[Position Monitor] ${assetConfig.name}: Entry=$${position.entryPrice.toFixed(decimals)}, Current=$${currentPrice.toFixed(decimals)}, P&L=${pnlSign}${pnlPercent.toFixed(2)}% (${pnlSign}$${pnlUSDC.toFixed(2)})`);
 
-        const stopLossPrice = position.entryPrice * (1 - strategyConfig.stopLossPercentage);
-
         // Ensure trailing stop is active (for positions loaded from disk that may not have it set)
         if (!position.trailingStopActive) {
             position.trailingStopActive = true;
@@ -241,65 +239,40 @@ async function checkOpenPositions() {
             logger.info(`🔒 Trailing stop activated for ${assetConfig.name} (loaded from disk)`);
         }
 
-        // Monitor trailing stop (should always be active for all positions)
-        if (position.trailingStopActive) {
-            // Update highest price if current is higher
-            const previousHighest = position.highestPrice || currentPrice;
-            position.highestPrice = Math.max(previousHighest, currentPrice);
+        // Monitor trailing stop (always active, sole exit mechanism - v2.17.2)
+        // Update highest price if current is higher
+        const previousHighest = position.highestPrice || currentPrice;
+        position.highestPrice = Math.max(previousHighest, currentPrice);
 
-            // Persist if highest price was updated
-            if (position.highestPrice > previousHighest) {
-                await savePositions(getOpenPositions());
-            }
-
-            // Fixed 2.5% trailing stop (v2.12.0: no longer dynamic based on MH)
-            const trailingStopPercent = 0.025; // Fixed 2.5%
-            const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
-
-            // Calculate potential P&L if trailing stop is hit
-            const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
-            const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
-            const pnlSign = potentialPnlPercent >= 0 ? '+' : '';
-
-            // Log trailing stop status with fixed percentage, potential P&L, and highest price
-            logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)} (${(trailingStopPercent * 100).toFixed(1)}% fixed trail), Potential P&L=${pnlSign}${potentialPnlPercent.toFixed(2)}% (${pnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
-
-            // Show distance to move trailing up (how much price needs to rise to beat current high)
-            const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
-            const distanceToTrailingStop = ((currentPrice - trailingStopPrice) / currentPrice) * 100;
-            logger.info(`[Targets] ${assetConfig.name}: New high=${distanceToNewHigh.toFixed(2)}% away, Trail hit=${distanceToTrailingStop.toFixed(2)}% away`);
-
-            if (currentPrice < trailingStopPrice) {
-                logger.info(`🎯 Trailing stop hit for ${assetConfig.name}! Trail Stop: $${trailingStopPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
-                await executeSellOrder(position);
-                // Reset state to BEARISH after selling
-                resetState(position.asset);
-                await sleep(API_DELAYS.RATE_LIMIT);
-                continue;
-            }
+        // Persist if highest price was updated
+        if (position.highestPrice > previousHighest) {
+            await savePositions(getOpenPositions());
         }
 
-        // Check Stop Loss (only exit condition besides trailing stop)
-        let shouldSell = false;
-        let sellReason = '';
+        // Fixed 2.5% trailing stop - sole exit mechanism
+        const trailingStopPercent = 0.025; // Fixed 2.5%
+        const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
 
-        if (currentPrice <= stopLossPrice) {
-            logger.info(`⛔ STOP LOSS reached for ${assetConfig.name}! Stop: $${stopLossPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
-            shouldSell = true;
-            sellReason = 'Stop Loss';
-        } else {
-            // Log distance to stop loss if not trailing yet
-            if (!position.trailingStopActive) {
-                const distanceToBreakeven = ((position.entryPrice - currentPrice) / currentPrice) * 100;
-                const distanceToSL = ((currentPrice - stopLossPrice) / currentPrice) * 100;
-                logger.info(`[Targets] ${assetConfig.name}: Breakeven=${Math.abs(distanceToBreakeven).toFixed(2)}% away, SL=${distanceToSL.toFixed(2)}% away`);
-            }
-        }
+        // Calculate potential P&L if trailing stop is hit
+        const potentialPnlPercent = ((trailingStopPrice - position.entryPrice) / position.entryPrice) * 100;
+        const potentialPnlUSDC = (trailingStopPrice - position.entryPrice) * (position.amount / position.entryPrice);
+        const potentialPnlSign = potentialPnlPercent >= 0 ? '+' : '';
 
-        if (shouldSell) {
+        // Log trailing stop status with fixed percentage, potential P&L, and highest price
+        logger.info(`[Trailing] ${assetConfig.name}: Trail Stop=$${trailingStopPrice.toFixed(decimals)} (${(trailingStopPercent * 100).toFixed(1)}% fixed trail), Potential P&L=${potentialPnlSign}${potentialPnlPercent.toFixed(2)}% (${potentialPnlSign}$${potentialPnlUSDC.toFixed(2)}), Highest=$${position.highestPrice.toFixed(decimals)}`);
+
+        // Show distance to move trailing up (how much price needs to rise to beat current high)
+        const distanceToNewHigh = ((position.highestPrice - currentPrice) / currentPrice) * 100;
+        const distanceToTrailingStop = ((currentPrice - trailingStopPrice) / currentPrice) * 100;
+        logger.info(`[Targets] ${assetConfig.name}: New high=${distanceToNewHigh.toFixed(2)}% away, Trail hit=${distanceToTrailingStop.toFixed(2)}% away`);
+
+        if (currentPrice < trailingStopPrice) {
+            logger.info(`🎯 Trailing stop hit for ${assetConfig.name}! Trail Stop: $${trailingStopPrice.toFixed(decimals)}, Current: $${currentPrice.toFixed(decimals)}`);
             await executeSellOrder(position);
             // Reset state to BEARISH after selling
             resetState(position.asset);
+            await sleep(API_DELAYS.RATE_LIMIT);
+            continue;
         }
 
         // Add delay between position checks to reduce RPC load
