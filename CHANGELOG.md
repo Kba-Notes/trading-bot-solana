@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.0] - 2025-01-09
+
+### Changed
+- **🎯 Simplified Entry Strategy: Trend-Only Momentum** - Removed spike momentum, keeping only trend detection
+  - **Rationale**: Focus on steady, reliable uptrends rather than explosive pumps
+  - **Old System (v2.15.0-v2.17.2)**: Dual-momentum (Spike OR Trend)
+    - Spike: 2-minute detection, 0.50% threshold (fast pumps)
+    - Trend: 10-minute average, 0.20% threshold (steady climbs)
+    - Entry triggered by either signal (OR logic)
+  - **New System (v2.18.0)**: Trend-only momentum
+    - Only trend: 10-minute average, 0.20% threshold
+    - Entry requires sustained upward movement (more deliberate)
+    - No more spike detection (removed fast pump entries)
+  - **Impact**:
+    - ✅ More conservative entries (reduces false signals)
+    - ✅ Better entry quality (confirmed trends vs random spikes)
+    - ✅ Simpler logic (one detector instead of two)
+    - ⚠️ May miss very fast pumps (trade-off for quality)
+  - **Modified Files**:
+    - [src/bot.ts:30-41](src/bot.ts#L30-L41) - Removed spike history tracking
+    - [src/bot.ts:281-401](src/bot.ts#L281-L401) - Simplified checkTokenMomentumForBuy()
+  - **Log Changes**:
+    - Old: `Spike +0.67% | Trend +0.23%` with `SPIKE`, `TREND`, or `SPIKE+TREND` triggers
+    - New: `Trend +0.23% (10-min avg)` with `TREND` trigger only
+
+- **💰 Position Limit: Maximum 3 Concurrent Positions** - Capital management with $1,794 USDC wallet
+  - **Configuration**:
+    - Max positions: 3 (down from 4)
+    - Trade amount: $500 USDC per position (unchanged)
+    - Total capital used: $1,500 max (83% utilization)
+    - Buffer: $294 USDC (for fees, slippage, safety margin)
+  - **Behavior**: First-come-first-served
+    - Bot monitors all 4 tokens (JUP, WIF, PENG, BONK)
+    - Only buys when fewer than 3 positions are open
+    - First 3 tokens to trigger trend momentum get bought
+    - 4th token must wait until a position closes
+  - **Modified Files**:
+    - [src/bot.ts:41](src/bot.ts#L41) - Added MAX_CONCURRENT_POSITIONS = 3
+    - [src/bot.ts:304-308](src/bot.ts#L304-L308) - Pre-scan position check
+    - [src/bot.ts:372-377](src/bot.ts#L372-L377) - Pre-buy position check
+    - [src/config.ts:42](src/config.ts#L42) - Updated comment with capital breakdown
+  - **Benefits**:
+    - ✅ Conservative capital management (leaves buffer for fees)
+    - ✅ Prevents overallocation
+    - ✅ Simple, fair allocation (no priority system needed)
+
+### Technical Details
+- Entry logic: `BUY if MH > -0.5% AND Trend Momentum > 0.20%`
+- Removed: Spike momentum calculation, spike price history, spike-related logs
+- Position check happens twice: before scanning tokens, and before executing buy
+- No changes to exit mechanism (still 2.5% fixed trailing stop)
+- Backwards compatible: Existing positions continue to work
+
 ## [2.17.2] - 2025-12-04
 
 ### Removed

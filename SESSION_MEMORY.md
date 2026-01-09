@@ -235,7 +235,7 @@ git status --ignored | grep .env  # Verify .env ignored
 - [x] Bot running in production
 - [x] All improvements implemented
 
-**Last Updated**: 2025-12-04 (Latest session - v2.17.1 documentation audit and correction)
+**Last Updated**: 2026-01-09 (Latest session - v2.18.0 trend-only momentum & position limit)
 **Status**: ✅ Ready for continuous development
 
 **Critical Workflow Reminder**: ALWAYS update CHANGELOG.md, README.md, and SESSION_MEMORY.md for user-facing changes with same priority as code commits!
@@ -246,9 +246,62 @@ git status --ignored | grep .env  # Verify .env ignored
 
 ### ✅ Completed Features
 
-**LATEST - December 4, 2025**
+**LATEST - January 9, 2026**
 
-1. **Removed Redundant Stop Loss Code** (v2.17.2 - Dec 4, 2025)
+1. **Simplified Entry Strategy: Trend-Only Momentum** (v2.18.0 - Jan 9, 2026)
+   - **User request**: Simplify entry signals by removing spike momentum detection
+   - **Rationale**: Focus on sustained uptrends for better signal quality
+   - **Old system (v2.15.0-v2.17.2)**: Dual-momentum detection
+     - Spike momentum: 2-minute window, 0.50% threshold (catches explosive pumps)
+     - Trend momentum: 10-minute average, 0.20% threshold (catches steady climbs)
+     - Entry logic: `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+   - **New system (v2.18.0)**: Trend-only momentum
+     - Only trend momentum: 10-minute average, 0.20% threshold
+     - Entry logic: `BUY if MH > -0.5% AND Trend > 0.20%`
+     - More conservative, deliberate entries on confirmed uptrends
+   - **Code changes**:
+     - [src/bot.ts:30-41](src/bot.ts#L30-L41) - Removed spike history tracking, variables, and constants
+     - [src/bot.ts:281-401](src/bot.ts#L281-L401) - Simplified checkTokenMomentumForBuy() function
+     - [src/config.ts:45-50](src/config.ts#L45-L50) - Marked SMA/RSI parameters as deprecated
+   - **Log changes**:
+     - Old: `Spike +0.67% | Trend +0.23%` with `SPIKE`, `TREND`, or `SPIKE+TREND` triggers
+     - New: `Trend +0.23% (10-min avg)` with `TREND` trigger only
+   - **Impact**:
+     - ✅ Reduced false signals (no more random spike entries)
+     - ✅ Better entry quality (confirmed trends vs explosive pumps)
+     - ✅ Simpler logic (one detector instead of two)
+     - ⚠️ May miss very fast pumps (trade-off for quality)
+   - **Status**: ✅ Committed to GitHub
+
+2. **Position Limit: Maximum 3 Concurrent Positions** (v2.18.0 - Jan 9, 2026)
+   - **User request**: Implement capital management for $1,794 USDC wallet
+   - **Configuration**:
+     - Max positions: 3 (down from 4)
+     - Trade amount: $500 per position (unchanged)
+     - Total capital used: $1,500 (83% utilization)
+     - Buffer: $294 USDC (fees, slippage, safety margin)
+   - **Behavior**: First-come-first-served
+     - Bot monitors all 4 tokens (JUP, WIF, PENG, BONK)
+     - Only buys when fewer than 3 positions are open
+     - First 3 tokens to trigger trend momentum get bought
+     - 4th token must wait until a position closes
+   - **Code changes**:
+     - [src/bot.ts:41](src/bot.ts#L41) - Added `MAX_CONCURRENT_POSITIONS = 3`
+     - [src/bot.ts:304-308](src/bot.ts#L304-L308) - Pre-scan position limit check
+     - [src/bot.ts:372-377](src/bot.ts#L372-L377) - Pre-buy position limit check
+     - [src/config.ts:42](src/config.ts#L42) - Updated comment with capital breakdown
+   - **Position checks**:
+     - Check 1: Before scanning tokens (skip scan if at limit)
+     - Check 2: Before executing buy (prevents race condition)
+   - **Benefits**:
+     - ✅ Conservative capital management (leaves buffer)
+     - ✅ Prevents overallocation
+     - ✅ Simple, fair allocation (no priority system)
+   - **Status**: ✅ Committed to GitHub
+
+**PREVIOUS SESSIONS - December 4, 2025**
+
+3. **Removed Redundant Stop Loss Code** (v2.17.2 - Dec 4, 2025)
    - **Critical discovery during audit**: Stop loss code was dead code
      - Trailing stop activates immediately at -2.5% from entry
      - Separate stop loss would trigger at -1% from entry

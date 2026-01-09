@@ -6,11 +6,12 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Core Trading
 - **Automated Trading:** Executes buy and sell orders on Solana DEXs without manual intervention
-- **Golden Cross Strategy:** SMA(12) × SMA(26) crossover with RSI(14) > 50 confirmation on 5-minute timeframe (ultra-responsive for meme coins)
-  - SMA(12) = 1 hour of price data
-  - SMA(26) = 2.2 hours of price data
+- **Trend Momentum Strategy:** Detects sustained uptrends using 10-minute average rate of change (ultra-responsive for meme coins)
+  - Entry: Trend momentum > 0.20% (10-period average of consecutive variations)
+  - Filters out false signals from random spikes or flat periods
 - **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends on 5-minute candles to protect capital during bearish markets
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
+- **Position Limit:** Maximum 3 concurrent positions ($500 each = $1,500 total capital)
 
 ### Risk Management
 - **Single Exit Mechanism:**
@@ -181,11 +182,15 @@ export const assetsToTrade = [
 ## Trading Strategy Details
 
 ### Entry Conditions (All must be true)
-1. **Market Health Index > 0** - Overall crypto market is bullish (BTC/ETH/SOL weighted on 1-hour SMA)
-2. **Golden Cross** - SMA(12) crosses above SMA(26) - PRIMARY SIGNAL
-3. **RSI > 50** - Optional momentum confirmation (disabled by default for aggressive meme coin entries)
-4. **Trend Strength** - SMA slope > 0.1% (filters weak trends)
-5. **Low Volatility** - Average volatility < 5% (avoids choppy markets)
+1. **Market Health Index > -0.5%** - Overall crypto market not in severe bearish trend (BTC/ETH/SOL weighted on 5-minute SMA)
+   - Relaxed threshold allows entries during mild market weakness (meme coins pump independently)
+2. **Trend Momentum > 0.20%** - PRIMARY SIGNAL
+   - 10-period average of consecutive price variations
+   - Detects sustained upward movement over 10 minutes
+   - Filters out random spikes and flat periods with single pumps
+3. **Maximum 3 Positions** - Position limit check before buying
+   - First-come-first-served among 4 monitored tokens
+   - Ensures capital management and buffer for fees
 
 ### Exit Conditions
 - **Fixed Trailing Stop (2.5%) - Sole Exit Mechanism:**
@@ -213,14 +218,17 @@ export const assetsToTrade = [
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.17.0
+**Current Version:** 2.18.0
 
-### Latest Updates (v2.17.0 - Dec 02, 2025)
-- **⚡ Removed Golden Cross Requirement** - Momentum signals now trigger immediate buys
-  - Problem: Golden cross (SMA12 > SMA26) is a lagging indicator - waits for historical averages to align
-  - Example: WIF showed Spike +1.22% and Trend +0.36%, but bot waited for slow SMA crossover
-  - Solution: Entry now `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
-  - Result: Faster entries, better prices, catch pumps earlier (no SMA lag)
+### Latest Updates (v2.18.0 - Jan 09, 2025)
+- **🎯 Simplified to Trend-Only Momentum** - Removed spike detection for more conservative entries
+  - Problem: Spike momentum caught fast pumps but increased false signals
+  - Solution: Entry now `BUY if MH > -0.5% AND Trend > 0.20%` (trend-only)
+  - Result: More deliberate entries on confirmed uptrends, reduced noise
+- **💰 Maximum 3 Concurrent Positions** - Capital management for $1,794 USDC wallet
+  - Configuration: 3 positions max × $500 each = $1,500 total (83% utilization)
+  - Behavior: First-come-first-served among 4 monitored tokens
+  - Buffer: $294 USDC for fees, slippage, and safety margin
 
 ### Previous Updates (v2.16.0 - Dec 02, 2025)
 - **🎮 Manual Trading Commands** - Full control via Telegram
@@ -230,30 +238,22 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
   - `/start` - Resume trading (works because bot stays running)
   - Result: Full manual control without stopping the bot process
 
-### Previous Updates (v2.15.2 - Dec 02, 2025)
-- **⚡ Spike Momentum No Longer Delayed** - Fixed 9-minute wait after bot restart
-  - Problem: Bot waited for trend (10 prices) even though spike only needs 2 prices
-  - Solution: Check spike as soon as ready (2 min), add trend when ready (10 min)
-  - Result: Spike detection starts immediately after 2 minutes, not 10 minutes
+### Previous Updates (v2.17.0 - Dec 02, 2025)
+- **⚡ Removed Golden Cross Requirement** - Momentum signals now trigger immediate buys
+  - Problem: Golden cross (SMA12 > SMA26) is a lagging indicator - waits for historical averages to align
+  - Example: WIF showed Spike +1.22% and Trend +0.36%, but bot waited for slow SMA crossover
+  - Solution: Entry was `BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)`
+  - Result: Faster entries, better prices, catch pumps earlier (no SMA lag)
+  - **Note**: Dual-momentum system (spike + trend) simplified to trend-only in v2.18.0
 
-### Previous Updates (v2.15.1 - Dec 02, 2025)
-- **🔍 Improved Trend Momentum** - Now measures average rate of change, not just total change
-  - Problem: Old method (T-10 → T) couldn't distinguish steady trends from "flat + spike"
-  - Solution: Average of 9 consecutive period-to-period variations
-  - Result: Filters false trend signals (flat periods with spike at end)
-  - Example: 9 flat periods + 1 spike = 0.22% avg (filtered) vs true trend = 0.20% avg (detected)
-
-### Previous Updates (v2.15.0 - Dec 02, 2025)
-- **🎯 Dual-Momentum System** - Two independent detectors for optimal entry timing
-  - Problem: Bot caught fast pumps but missed steady climbs (bought peaks instead of trends)
-  - Solution: Two momentum detectors working in parallel
-    - **Spike Momentum (2-min)**: Catches explosive pumps > 0.50%
-    - **Trend Momentum (10-min)**: Catches steady climbs > 0.20%
-  - Entry: BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%) [Golden Cross removed in v2.17.0]
-  - Result: Enter early during steady uptrends, still catch fast pumps
-- **📊 Enhanced Logging & Notifications** - See which momentum triggered each buy
-  - Log format: `Spike +0.67% | Trend +0.23%`
-  - Telegram shows: `SPIKE`, `TREND`, or `SPIKE+TREND` with percentages
+### Previous Updates (v2.15.0-v2.15.2 - Dec 02, 2025)
+- **🎯 Dual-Momentum System** - Two independent detectors for optimal entry timing (DEPRECATED in v2.18.0)
+  - **Spike Momentum (2-min)**: Caught explosive pumps > 0.50%
+  - **Trend Momentum (10-min)**: Caught steady climbs > 0.20%
+  - Entry logic: BUY if MH > -0.5% AND (Spike > 0.50% OR Trend > 0.20%)
+  - v2.15.1: Improved trend calculation to average of 9 consecutive variations
+  - v2.15.2: Fixed spike detection delay (started after 2 min, not 10 min)
+  - **Removed in v2.18.0**: Simplified to trend-only momentum for better signal quality
 
 ### Previous Updates (v2.14.0 - Nov 28, 2025)
 - **⚡ Immediate Momentum (2-Period)** - Simplified from 3-period averaging to 2-period immediate momentum

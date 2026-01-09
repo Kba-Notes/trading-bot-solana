@@ -39,18 +39,15 @@ export const assetsToTrade = [
 export const strategyConfig = {
     timeframe: '5m' as const,      // Maps to GeckoTerminal '/ohlcv/minute' = 1-minute candles (see jupiter.ts:49)
     historicalDataLimit: 100,
-    tradeAmountUSDC: 500,
+    tradeAmountUSDC: 500,          // v2.18.0: $500 per position, max 3 concurrent positions = $1,500 total capital
     takeProfitPercentage: 0.08,    // DEPRECATED: No longer used (trailing stop activates before TP can be reached)
     stopLossPercentage: 0.01,      // DEPRECATED: No longer used (trailing stop is sole exit mechanism since v2.17.2)
-    // Strategy-specific parameters
-    shortSMAPeriod: 12,            // SMA(12) on 1-min candles = 12 minutes of data
-    longSMAPeriod: 26,             // SMA(26) on 1-min candles = 26 minutes of data
-    rsiPeriod: 14,                 // RSI(14) on 1-min candles = 14 minutes of data
-    rsiThreshold: 50,
-    // RSI filter control - set to false for meme coins (momentum-driven assets)
-    // Meme coins often start rallies from oversold conditions (RSI < 50)
-    // Enabling this filter can cause missed Golden Cross entries (e.g., BONK at RSI 34.88)
-    requireRsiConfirmation: false,  // Set to true for more conservative entries
+    // Strategy-specific parameters (DEPRECATED: Golden Cross and RSI no longer used as of v2.17.0)
+    shortSMAPeriod: 12,            // DEPRECATED: SMA(12) - Golden Cross removed in v2.17.0
+    longSMAPeriod: 26,             // DEPRECATED: SMA(26) - Golden Cross removed in v2.17.0
+    rsiPeriod: 14,                 // DEPRECATED: RSI(14) - No longer used
+    rsiThreshold: 50,              // DEPRECATED: RSI threshold - No longer used
+    requireRsiConfirmation: false, // DEPRECATED: RSI confirmation - No longer used
 };
 
 export const BOT_EXECUTION_INTERVAL = 5 * 60 * 1000;         // 5 minutes - main analysis cycle (288 checks/day)
