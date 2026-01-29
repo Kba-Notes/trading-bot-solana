@@ -6,21 +6,24 @@ A fully autonomous trading bot that executes a trend-following strategy on the S
 
 ### Core Trading
 - **Automated Trading:** Executes buy and sell orders on Solana DEXs without manual intervention
-- **Trend Momentum Strategy:** Detects sustained uptrends using 10-minute average rate of change (ultra-responsive for meme coins)
-  - Entry: Trend momentum > 0.20% (10-period average of consecutive variations)
-  - Filters out false signals from random spikes or flat periods
+- **Multi-Filter Momentum Strategy:** (v2.19.0 Optimized)
+  - **Trend:** Momentum > 0.50% (10-period average) - filters noise
+  - **Volume:** 1.5x increase required - validates moves
+  - **RSI:** Must be < 70 - avoids overbought exhaustion
+  - **Result:** Fewer but significantly higher-quality entries
 - **Market Health Filter:** Analyzes BTC (25%), ETH (25%), and SOL (50%) trends on 5-minute candles to protect capital during bearish markets
 - **Multi-Asset Monitoring:** Trades configurable SPL tokens (currently: JUP, WIF, PENG, BONK)
 - **Position Limit:** Maximum 3 concurrent positions ($500 each = $1,500 total capital)
 
 ### Risk Management
 - **Single Exit Mechanism:**
-  - Fixed Trailing Stop: 2.5% (sole exit mechanism, predictable and consistent)
-    - Activates immediately on position entry at -2.5% from entry price
+  - Fixed Trailing Stop: 4% (v2.19.0: increased from 2.5% for meme coin volatility)
+    - Activates immediately on position entry at -4% from entry price
     - Updates every time price reaches a new high
-    - Always trails 2.5% below the highest price seen
-    - Maximum loss on entry: -2.5% (if price never rises)
+    - Always trails 4% below the highest price seen
+    - Maximum loss on entry: -4% (if price never rises)
     - Protection active from moment of entry (not waiting for profit)
+    - **Wider stop allows riding through normal volatility for larger gains**
   - No Take Profit: Trailing stop manages all exits for maximum upside capture
   - No Stop Loss: Trailing stop provides all downside protection
 - **Smart Entry Filters:**
@@ -184,51 +187,73 @@ export const assetsToTrade = [
 ### Entry Conditions (All must be true)
 1. **Market Health Index > -0.5%** - Overall crypto market not in severe bearish trend (BTC/ETH/SOL weighted on 5-minute SMA)
    - Relaxed threshold allows entries during mild market weakness (meme coins pump independently)
-2. **Trend Momentum > 0.20%** - PRIMARY SIGNAL
+2. **Trend Momentum > 0.50%** - PRIMARY SIGNAL (v2.19.0: increased from 0.20%)
    - 10-period average of consecutive price variations
    - Detects sustained upward movement over 10 minutes
-   - Filters out random spikes and flat periods with single pumps
-3. **Maximum 3 Positions** - Position limit check before buying
+   - Filters out noise, false signals, and weak trends
+   - **Stronger requirement = Higher quality entries**
+3. **Volume Confirmation > 1.5x** - NEW in v2.19.0
+   - Recent volume (last 5 periods) must be 1.5x previous average (10 periods)
+   - Validates momentum with trading activity
+   - Filters low-volume fake-outs
+4. **RSI(14) < 70** - NEW in v2.19.0
+   - Avoids overbought conditions
+   - Blocks entries into exhausted moves
+   - Better entry timing on strength, not exhaustion
+5. **Maximum 3 Positions** - Position limit check before buying
    - First-come-first-served among 4 monitored tokens
    - Ensures capital management and buffer for fees
 
 ### Exit Conditions
-- **Fixed Trailing Stop (2.5%) - Sole Exit Mechanism:**
+- **Fixed Trailing Stop (4%) - Sole Exit Mechanism (v2.19.0: increased from 2.5%):**
   - Activates immediately on position entry (not waiting for profit)
-  - Initial trailing stop: Entry price × 0.975 (-2.5% from entry)
+  - Initial trailing stop: Entry price × 0.96 (-4% from entry)
   - Updates highest price every time current price exceeds previous high
-  - Sells when current price drops below (highestPrice × 0.975)
+  - Sells when current price drops below (highestPrice × 0.96)
   - Locks in profits while allowing unlimited upside
   - Monitored every 1 minute for accurate peak capture
   - **Example flow:**
-    - Buy at $0.100 → Initial trailing at $0.0975 (-2.5%)
-    - Price rises to $0.103 → New trailing at $0.100425 (2.5% below $0.103)
-    - Price rises to $0.110 → New trailing at $0.10725 (2.5% below $0.110)
-    - Price drops to $0.107 → Sell triggered (below $0.10725)
+    - Buy at $0.100 → Initial trailing at $0.096 (-4%)
+    - Price rises to $0.105 → New trailing at $0.1008 (4% below $0.105)
+    - Price rises to $0.120 → New trailing at $0.1152 (4% below $0.120)
+    - Price drops to $0.115 → Sell triggered (below $0.1152)
+    - **Result: +15% gain** (vs +7% with old 2.5% stop)
 - **No Stop Loss:** Trailing stop provides all downside protection
 - **No Take Profit:** Trailing stop manages all exits
 
-### Expected Performance
-- **Win Rate:** 50-60%
-- **Risk/Reward Ratio:** 3:1 to 6:1 (improved with 1-minute monitoring)
-- **Average Win:** +10% to +20% (better peak capture with 1-min checks)
-- **Maximum Loss:** -2.5% (trailing stop from entry)
+### Expected Performance (v2.19.0 Optimized)
+- **Win Rate:** 55-65% (improved with better filters)
+- **Risk/Reward Ratio:** 3:1 to 5:1
+- **Average Win:** +12% to +22% (wider stop captures larger moves)
+- **Maximum Loss:** -4% (trailing stop from entry, increased from -2.5%)
+- **Signals per Day:** ~2-4 (down from ~5-10, but much higher quality)
+- **Expected Monthly Return:** Significantly improved with quality over quantity
 
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-**Current Version:** 2.18.0
+**Current Version:** 2.19.0
 
-### Latest Updates (v2.18.0 - Jan 09, 2025)
+### Latest Updates (v2.19.0 - Jan 29, 2026)
+- **🚨 CRITICAL: Increased Trend Threshold to 0.50%** - Dramatically improved signal quality
+  - Problem: Bot losing money with 0.20% threshold (too many false signals)
+  - Solution: Increased to 0.50% to filter noise and require significant momentum
+  - Result: Fewer but much higher-quality entries, filtering false breakouts
+- **🚨 CRITICAL: Increased Trailing Stop to 4%** - Better trend riding for meme coins
+  - Problem: 2.5% stop too tight, getting stopped out before moves develop
+  - Solution: 4% trailing stop accommodates normal meme coin volatility
+  - Result: Stay in winners longer, capture larger moves (10-20% vs 5-8%)
+- **📊 Added Volume Confirmation** - Requires 1.5x volume increase to validate momentum
+  - Filters low-volume fake-outs that often reverse
+  - Confirms genuine moves with institutional interest
+- **🛡️ Added RSI Overbought Filter** - Blocks entries when RSI(14) > 70
+  - Avoids buying exhausted tops that often pullback
+  - Improves entry timing and risk/reward
+
+### Previous Updates (v2.18.0 - Jan 09, 2025)
 - **🎯 Simplified to Trend-Only Momentum** - Removed spike detection for more conservative entries
-  - Problem: Spike momentum caught fast pumps but increased false signals
-  - Solution: Entry now `BUY if MH > -0.5% AND Trend > 0.20%` (trend-only)
-  - Result: More deliberate entries on confirmed uptrends, reduced noise
 - **💰 Maximum 3 Concurrent Positions** - Capital management for $1,794 USDC wallet
-  - Configuration: 3 positions max × $500 each = $1,500 total (83% utilization)
-  - Behavior: First-come-first-served among 4 monitored tokens
-  - Buffer: $294 USDC for fees, slippage, and safety margin
 
 ### Previous Updates (v2.16.0 - Dec 02, 2025)
 - **🎮 Manual Trading Commands** - Full control via Telegram

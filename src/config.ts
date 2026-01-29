@@ -45,10 +45,18 @@ export const strategyConfig = {
     // Strategy-specific parameters (DEPRECATED: Golden Cross and RSI no longer used as of v2.17.0)
     shortSMAPeriod: 12,            // DEPRECATED: SMA(12) - Golden Cross removed in v2.17.0
     longSMAPeriod: 26,             // DEPRECATED: SMA(26) - Golden Cross removed in v2.17.0
-    rsiPeriod: 14,                 // DEPRECATED: RSI(14) - No longer used
+    rsiPeriod: 14,                 // DEPRECATED: RSI(14) - No longer used for entry (v2.19.0: now used as overbought filter)
     rsiThreshold: 50,              // DEPRECATED: RSI threshold - No longer used
     requireRsiConfirmation: false, // DEPRECATED: RSI confirmation - No longer used
 };
+
+// v2.19.0: Strategy optimization constants
+// These constants are defined in src/bot.ts but documented here for reference:
+// - TREND_MOMENTUM_THRESHOLD = 0.50 (increased from 0.20% for better signal quality)
+// - Trailing Stop = 4% (increased from 2.5% for meme coin volatility)
+// - Volume Confirmation = 1.5x ratio required (last 5 vs previous 10 periods)
+// - RSI Overbought Filter = RSI(14) > 70 blocks entry
+// - MAX_CONCURRENT_POSITIONS = 3
 
 export const BOT_EXECUTION_INTERVAL = 5 * 60 * 1000;         // 5 minutes - main analysis cycle (288 checks/day)
 export const POSITION_CHECK_INTERVAL = 1 * 60 * 1000;        // 1 minute - position monitoring for trailing stop capture

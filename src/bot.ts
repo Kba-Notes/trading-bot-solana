@@ -2,13 +2,13 @@
 
 import { logger } from './services.js';
 import { assetsToTrade, strategyConfig, BOT_EXECUTION_INTERVAL, POSITION_CHECK_INTERVAL, USDC_MINT, marketFilterConfig } from './config.js';
-import { getCurrentPrice } from './data_extractor/jupiter.js';
+import { getCurrentPrice, getHistoricalDataWithVolume } from './data_extractor/jupiter.js';
 import { executeBuyOrder, executeSellOrder, getOpenPositions, initializeTrader } from './order_executor/trader.js';
 import { sendMessage, sendAnalysisSummary, sendPositionCheck, markCycleStart } from './notifier/telegram.js';
 import { initializeCommandHandlers } from './notifier/commandHandler.js';
 import { loadAssetStates, resetState } from './state/assetStates.js';
 import { savePositions } from './persistence/positions.js';
-import { SMA } from 'technicalindicators';
+import { SMA, RSI } from 'technicalindicators';
 import axios from 'axios';
 import { sleep, executeWithTiming } from './utils/async.js';
 import { API_DELAYS, BOT_CONSTANTS, RETRY_CONFIG } from './constants.js';
@@ -36,7 +36,8 @@ interface PriceSnapshot {
 const trendPriceHistory: Map<string, PriceSnapshot[]> = new Map(); // Last 10 prices for trend detection
 
 // v2.18.0: Trend momentum configuration
-const TREND_MOMENTUM_THRESHOLD = 0.20; // 0.20% for steady climbs (10-period average)
+// v2.19.0: Increased threshold from 0.20% to 0.50% to filter out noise and false signals
+const TREND_MOMENTUM_THRESHOLD = 0.50; // 0.50% for steady climbs (10-period average) - filters meme coin noise
 const TREND_HISTORY_SIZE = 10; // Track last 10 prices for trend detection
 const MAX_CONCURRENT_POSITIONS = 3; // Maximum number of positions allowed simultaneously
 
@@ -49,10 +50,11 @@ const strategy = new GoldenCrossStrategy({
 
 /**
  * Get fixed trailing stop percentage (v2.12.0: removed dynamic MH-based logic)
- * Fixed at 2.5% for consistent, predictable exits
+ * v2.19.0: Increased from 2.5% to 4% to accommodate meme coin volatility
+ * Fixed at 4% for consistent, predictable exits
  */
 export function getDynamicTrailingStop(marketHealth: number): number {
-    return 0.025; // Fixed 2.5% trailing stop (no longer dynamic)
+    return 0.04; // Fixed 4% trailing stop (increased from 2.5% in v2.19.0)
 }
 
 /**
@@ -247,8 +249,8 @@ async function checkOpenPositions() {
             await savePositions(getOpenPositions());
         }
 
-        // Fixed 2.5% trailing stop - sole exit mechanism
-        const trailingStopPercent = 0.025; // Fixed 2.5%
+        // Fixed 4% trailing stop - sole exit mechanism (v2.19.0: increased from 2.5%)
+        const trailingStopPercent = 0.04; // Fixed 4% (increased from 2.5% for meme coin volatility)
         const trailingStopPrice = position.highestPrice * (1 - trailingStopPercent);
 
         // Calculate potential P&L if trailing stop is hit
@@ -369,6 +371,53 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                 continue;
             }
 
+            // v2.19.0: Volume Confirmation - Check if volume is increasing
+            const assetConfig = assetsToTrade.find(a => a.mint === asset.mint);
+            if (!assetConfig?.geckoPool) {
+                logger.warn(`    └─ No gecko pool configured for ${asset.name}, skipping volume check`);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+
+            const historicalData = await getHistoricalDataWithVolume(assetConfig.geckoPool, '1m', 15);
+            if (historicalData.volumes.length < 15) {
+                logger.info(`    └─ Insufficient volume data (${historicalData.volumes.length}/15), skipping`);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+
+            // Calculate volume ratio: last 5 periods vs previous 10 periods
+            const recentVolumes = historicalData.volumes.slice(-5);
+            const previousVolumes = historicalData.volumes.slice(-15, -5);
+            const avgRecentVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
+            const avgPreviousVolume = previousVolumes.reduce((a, b) => a + b, 0) / previousVolumes.length;
+            const volumeRatio = avgRecentVolume / avgPreviousVolume;
+
+            logger.info(`    └─ Volume: Recent avg=${avgRecentVolume.toFixed(0)}, Previous avg=${avgPreviousVolume.toFixed(0)}, Ratio=${volumeRatio.toFixed(2)}x`);
+
+            if (volumeRatio < 1.5) {
+                logger.info(`    └─ Volume too low - HOLD (ratio ${volumeRatio.toFixed(2)}x < 1.5x required)`);
+                await sleep(API_DELAYS.RATE_LIMIT);
+                continue;
+            }
+
+            // v2.19.0: RSI Overbought Filter - Avoid buying into overbought conditions
+            if (historicalData.prices.length >= 14) {
+                const rsiValues = RSI.calculate({
+                    period: 14,
+                    values: historicalData.prices
+                });
+                const currentRSI = rsiValues[rsiValues.length - 1];
+
+                logger.info(`    └─ RSI(14): ${currentRSI.toFixed(2)}`);
+
+                if (currentRSI > 70) {
+                    logger.info(`    └─ Overbought - HOLD (RSI ${currentRSI.toFixed(2)} > 70)`);
+                    await sleep(API_DELAYS.RATE_LIMIT);
+                    continue;
+                }
+            }
+
             // v2.18.0: Check position limit again before buying (in case another token was bought during iteration)
             const currentPositions = getOpenPositions();
             if (currentPositions.length >= MAX_CONCURRENT_POSITIONS) {
@@ -376,11 +425,11 @@ async function checkTokenMomentumForBuy(): Promise<number> {
                 break; // Exit loop, no more buys allowed
             }
 
-            // Trend momentum triggered
-            const triggerReason = `TREND (${trendMomentum.toFixed(2)}% > ${TREND_MOMENTUM_THRESHOLD}%)`;
+            // All filters passed - execute buy
+            const triggerReason = `TREND (${trendMomentum.toFixed(2)}% > ${TREND_MOMENTUM_THRESHOLD}%), Vol=${volumeRatio.toFixed(2)}x`;
 
             buySignals++;
-            logger.info(`    └─ ⚡ TREND MOMENTUM SIGNAL: ${triggerReason}`);
+            logger.info(`    └─ ⚡ ALL FILTERS PASSED: Trend + Volume + RSI`);
             logger.info(`    └─ 🟢 BUY SIGNAL: ${asset.name} - MH=${latestMarketHealth.toFixed(2)}%, ${triggerReason}`);
 
             const buySuccess = await executeBuyOrder(asset.mint, strategyConfig.tradeAmountUSDC, currentPrice, triggerReason);
