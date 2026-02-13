@@ -6,9 +6,44 @@
     "auditLog": ".093f86c14f0dd79017f1b5e0412fefe5ccb8b0a7-audit.json",
     "files": [
         {
-            "date": 1764162350573,
-            "name": "trading-bot-2025-11-26.log",
-            "hash": "a3f4cf4d92e5b2ded7044f93b85898ffca7de34eff5512d93b77e90ced253f27"
+            "date": 1770336027692,
+            "name": "trading-bot-2026-02-06.log",
+            "hash": "c6459242d27f56273fb7aed8a030131601465d5b921ba36b9cb6b5b2c45c69bf"
+        },
+        {
+            "date": 1770422404302,
+            "name": "trading-bot-2026-02-07.log",
+            "hash": "7a2c3ae993ed196e95a3fcd76203bca6dbd5ff380c1ac8778106221535315b24"
+        },
+        {
+            "date": 1770508839422,
+            "name": "trading-bot-2026-02-08.log",
+            "hash": "ef58cd46459babf9b8f9e0e736118cdfdd2bc36e66f20242c7f919b70f6b85be"
+        },
+        {
+            "date": 1770595207778,
+            "name": "trading-bot-2026-02-09.log",
+            "hash": "cc5bceb5da5d5d10ba3f46a469bb7a7084157c999f6550c9008c9d58427c650c"
+        },
+        {
+            "date": 1770681624506,
+            "name": "trading-bot-2026-02-10.log",
+            "hash": "81690b67cf38783b6783437083607ae29eda6df4b325b657e31692a06f8290b2"
+        },
+        {
+            "date": 1770768042177,
+            "name": "trading-bot-2026-02-11.log",
+            "hash": "c44cbacccc60618de89b82fcedc7efcb7cd333260c264985360a1eb0cc847a55"
+        },
+        {
+            "date": 1770854402596,
+            "name": "trading-bot-2026-02-12.log",
+            "hash": "75dda63061aec77ec23c98267caeff87c5c733baedd8c90e6b09ffef8a9e69f1"
+        },
+        {
+            "date": 1770940814143,
+            "name": "trading-bot-2026-02-13.log",
+            "hash": "4ff3fb904dbef60434b68150f2a9ea5280bdef0eece227b41942129e75beb753"
         }
     ],
     "hashType": "sha256"
